@@ -3,9 +3,13 @@ services:
     build: .
     ports:
       - "7860:7860"
+      - "7861:7861"
     volumes:
+      - ./data:/app/data
       - ./data/obsidian:/app/data/obsidian:ro
       - ./data/chromadb:/app/data/chromadb
       - ./scripts:/app/scripts:ro
     env_file: .env
+    environment:
+      ANONYMIZED_TELEMETRY: "FALSE"
     restart: unless-stopped
