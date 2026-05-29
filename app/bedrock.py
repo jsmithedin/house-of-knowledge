@@ -26,10 +26,11 @@ class BedrockClient:
     def invoke(self, system_prompt: str, user_message: str) -> InvokeResult:
         body = {
             "messages": [
-                {"role": "user", "content": [{"text": user_message}]},
+                {"role": "user", "content": [{"type": "text", "text": user_message}]},
             ],
-            "system": [{"text": system_prompt}],
-            "inferenceConfig": {"maxTokens": 2048, "temperature": 0.3},
+            "system": [{"type": "text", "text": system_prompt}],
+            "max_tokens": 2048,
+            "anthropic_version": "bedrock-2023-05-31",
         }
         try:
             response = self._client.invoke_model(
