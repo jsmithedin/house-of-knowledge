@@ -1,78 +1,143 @@
+import json
 import logging
+import sys
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 
-import gradio as gr
+_root = Path(__file__).resolve().parent.parent
+if str(_root) not in sys.path:
+    sys.path.insert(0, str(_root))
+
+import streamlit as st
 
 from app.bedrock import BedrockClient
 from app.config import Settings
 from app.embedder import Embedder
+from app.indexing import index_vault
 from app.rag import RagPipeline
 from app.store import NoteStore
+from app.usage import UsageStore
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
 
-settings = Settings()
-embedder = Embedder()
-store = NoteStore(chroma_dir=settings.chroma_dir, collection_name=settings.collection_name)
-bedrock = BedrockClient(model_id=settings.bedrock_model_id, region=settings.aws_region)
-pipeline = RagPipeline(
-    store=store,
-    embedder=embedder,
-    bedrock=bedrock,
-    wiki_base_url=settings.wiki_base_url,
-    chat_history_window=settings.chat_history_window,
-)
-
-distinct = store.get_distinct_metadata()
-ARC_CHOICES = ["All"] + distinct["arcs"]
-SESSION_CHOICES = ["All"] + distinct["sessions"]
-TAG_CHOICES = ["All"] + distinct["tags"]
-
-EMPTY_BANNER = (
-    "⚠️ No notes indexed yet. Run sync-and-index.sh from your Mac."
-    if store.count == 0
-    else None
-)
+REINDEX_PORT = 7861
+EMPTY_BANNER_MSG = "⚠️ No notes indexed yet. Run sync-and-index.sh from your Mac."
 
 
-def respond(message, history, arc, session, tag, k):
-    if not message.strip():
-        return history, ""
-    chat_history = [{"role": h["role"], "content": h["content"]} for h in history]
+class _ReindexHandler(BaseHTTPRequestHandler):
+    settings: Settings
+    embedder: Embedder
+
+    def do_POST(self):
+        if self.path != "/reindex":
+            self.send_error(404)
+            return
+        stats = index_vault(
+            obsidian_dir=self.settings.obsidian_dir,
+            chroma_dir=self.settings.chroma_dir,
+            embedder=self.embedder,
+            collection_name=self.settings.collection_name,
+        )
+        log.info("Reindex complete: %s", stats)
+        body = json.dumps(stats).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, format, *args):
+        pass
+
+
+def _start_reindex_server(settings: Settings, embedder: Embedder) -> None:
+    handler = type(
+        "ReindexHandler",
+        (_ReindexHandler,),
+        {"settings": settings, "embedder": embedder},
+    )
+    server = HTTPServer(("0.0.0.0", REINDEX_PORT), handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    log.info("Reindex server listening on port %s", REINDEX_PORT)
+
+
+@st.cache_resource
+def _load_pipeline() -> tuple[RagPipeline, NoteStore]:
+    settings = Settings()
+    embedder = Embedder()
+    store = NoteStore(chroma_dir=settings.chroma_dir, collection_name=settings.collection_name)
+    bedrock = BedrockClient(model_id=settings.bedrock_model_id, region=settings.aws_region)
+    usage_store = UsageStore(settings.usage_db_path)
+    usage_store.rollup_stale_months()
+    pipeline = RagPipeline(
+        store=store,
+        embedder=embedder,
+        bedrock=bedrock,
+        wiki_base_url=settings.wiki_base_url,
+        chat_history_window=settings.chat_history_window,
+        usage_store=usage_store,
+    )
+    _start_reindex_server(settings, embedder)
+    return pipeline, store
+
+
+def _respond(message: str, history: list[dict], arc: str, session: str, tag: str, k: int) -> str:
     answer, sources = pipeline.query(
         message=message,
         arc=arc,
         session=session,
         tag=tag,
-        k=int(k),
-        history=chat_history,
+        k=k,
+        history=history,
     )
-    full_answer = f"{answer}\n\n{sources}" if sources else answer
-    history.append({"role": "user", "content": message})
-    history.append({"role": "assistant", "content": full_answer})
-    return history, ""
+    return f"{answer}\n\n{sources}" if sources else answer
 
 
-with gr.Blocks(title="Normal Door Opening — Campaign Lore") as demo:
-    gr.Markdown("# 🎲 Normal Door Opening — Campaign Lore")
-    if EMPTY_BANNER:
-        gr.Markdown(EMPTY_BANNER)
+st.set_page_config(
+    page_title="Normal Door Opening — Campaign Lore",
+    page_icon="🎲",
+    layout="wide",
+)
 
-    with gr.Row():
-        arc_dd = gr.Dropdown(choices=ARC_CHOICES, value="All", label="Arc")
-        session_dd = gr.Dropdown(choices=SESSION_CHOICES, value="All", label="Session")
-        tag_dd = gr.Dropdown(choices=TAG_CHOICES, value="All", label="Tag")
-        k_slider = gr.Slider(minimum=1, maximum=15, value=5, step=1, label="k (chunks)")
+pipeline, store = _load_pipeline()
 
-    chatbot = gr.Chatbot(height=500, type="messages")
-    msg = gr.Textbox(placeholder="Type your question...", label="Question")
-    with gr.Row():
-        submit = gr.Button("Send", variant="primary")
-        clear = gr.Button("Clear")
+st.title("🎲 Normal Door Opening — Campaign Lore")
 
-    submit.click(respond, [msg, chatbot, arc_dd, session_dd, tag_dd, k_slider], [chatbot, msg])
-    msg.submit(respond, [msg, chatbot, arc_dd, session_dd, tag_dd, k_slider], [chatbot, msg])
-    clear.click(lambda: [], None, chatbot)
+if store.count == 0:
+    st.warning(EMPTY_BANNER_MSG)
 
-if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+distinct = store.get_distinct_metadata()
+col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+with col1:
+    arc = st.selectbox("Arc", ["All"] + distinct["arcs"], index=0)
+with col2:
+    session = st.selectbox("Session", ["All"] + distinct["sessions"], index=0)
+with col3:
+    tag = st.selectbox("Tag", ["All"] + distinct["tags"], index=0)
+with col4:
+    k = st.slider("k (chunks)", min_value=1, max_value=15, value=5)
+
+if "messages" not in st.session_state:
+    st.session_state.messages = []
+
+for msg in st.session_state.messages:
+    with st.chat_message(msg["role"]):
+        st.markdown(msg["content"])
+
+if prompt := st.chat_input("Type your question..."):
+    st.session_state.messages.append({"role": "user", "content": prompt})
+    with st.chat_message("user"):
+        st.markdown(prompt)
+
+    history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[:-1]]
+    with st.chat_message("assistant"):
+        with st.spinner("Searching notes..."):
+            full_answer = _respond(prompt, history, arc, session, tag, int(k))
+        st.markdown(full_answer)
+    st.session_state.messages.append({"role": "assistant", "content": full_answer})
+
+if st.button("Clear chat"):
+    st.session_state.messages = []
+    st.rerun()
