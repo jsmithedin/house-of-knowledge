@@ -3,6 +3,30 @@ from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
+class ModelPricing:
+    input_per_1m: float
+    output_per_1m: float
+
+
+# USD per 1M tokens — verify against current AWS Bedrock pricing when updating.
+MODEL_PRICING: dict[str, ModelPricing] = {
+    "amazon.nova-lite-v1:0": ModelPricing(input_per_1m=0.06, output_per_1m=0.24),
+    "anthropic.claude-haiku-4-5-20251001-v1:0": ModelPricing(
+        input_per_1m=1.00, output_per_1m=5.00
+    ),
+}
+
+
+def estimate_cost_usd(model_id: str, input_tokens: int, output_tokens: int) -> float:
+    pricing = MODEL_PRICING.get(model_id)
+    if pricing is None:
+        return 0.0
+    return (input_tokens / 1_000_000) * pricing.input_per_1m + (
+        output_tokens / 1_000_000
+    ) * pricing.output_per_1m
+
+
+@dataclass(frozen=True)
 class Settings:
     bedrock_model_id: str = field(
         default_factory=lambda: os.getenv("BEDROCK_MODEL_ID", "amazon.nova-lite-v1:0")
@@ -18,4 +42,7 @@ class Settings:
     )
     obsidian_dir: str = field(default_factory=lambda: os.getenv("OBSIDIAN_DIR", "data/obsidian"))
     chroma_dir: str = field(default_factory=lambda: os.getenv("CHROMA_DIR", "data/chromadb"))
+    usage_db_path: str = field(
+        default_factory=lambda: os.getenv("USAGE_DB_PATH", "data/usage.sqlite")
+    )
     collection_name: str = "campaign_notes"
