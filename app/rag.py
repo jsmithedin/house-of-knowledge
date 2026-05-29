@@ -4,6 +4,7 @@ from app.bedrock import BedrockClient, BedrockError
 from app.citations import format_sources_section
 from app.filters import build_where_clause
 from app.store import NoteStore
+from app.usage import UsageStore
 
 log = logging.getLogger(__name__)
 
@@ -23,12 +24,14 @@ class RagPipeline:
         bedrock: BedrockClient,
         wiki_base_url: str,
         chat_history_window: int,
+        usage_store: UsageStore | None = None,
     ):
         self.store = store
         self.embedder = embedder
         self.bedrock = bedrock
         self.wiki_base_url = wiki_base_url
         self.chat_history_window = chat_history_window
+        self.usage_store = usage_store
 
     def query(
         self,
@@ -72,9 +75,19 @@ class RagPipeline:
         user_message += f"Retrieved session notes:\n{context}\n\nQuestion: {message}"
 
         try:
-            answer = self.bedrock.invoke(SYSTEM_PROMPT, user_message)
+            result = self.bedrock.invoke(SYSTEM_PROMPT, user_message)
         except BedrockError:
             return ("Generation failed — try again.", "")
 
+        if self.usage_store is not None:
+            try:
+                self.usage_store.record_event(
+                    self.bedrock.model_id,
+                    result.input_tokens,
+                    result.output_tokens,
+                )
+            except Exception:
+                log.exception("Failed to record token usage")
+
         sources = format_sources_section(self.wiki_base_url, metadatas)
-        return (answer, sources)
+        return (result.text, sources)
