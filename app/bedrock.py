@@ -38,14 +38,14 @@ class BedrockClient:
                 body=json.dumps(body),
             )
             result = json.loads(response["body"].read())
-            text = result["output"]["message"]["content"][0]["text"]
+            text = result["content"][0]["text"]
             usage = result.get("usage") or {}
             if "usage" not in result:
                 log.warning("Bedrock response missing usage metadata")
             return InvokeResult(
                 text=text,
-                input_tokens=int(usage.get("inputTokens", 0)),
-                output_tokens=int(usage.get("outputTokens", 0)),
+                input_tokens=int(usage.get("input_tokens", 0)),
+                output_tokens=int(usage.get("output_tokens", 0)),
             )
         except Exception as e:
             log.exception("Bedrock invoke failed")
