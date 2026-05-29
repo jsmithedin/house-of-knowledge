@@ -11,7 +11,7 @@ class ModelPricing:
 # USD per 1M tokens — verify against current AWS Bedrock pricing when updating.
 MODEL_PRICING: dict[str, ModelPricing] = {
     "amazon.nova-lite-v1:0": ModelPricing(input_per_1m=0.06, output_per_1m=0.24),
-    "anthropic.claude-haiku-4-5-20251001-v1:0": ModelPricing(
+    "eu.anthropic.claude-haiku-4-5-20251001-v1:0": ModelPricing(
         input_per_1m=1.00, output_per_1m=5.00
     ),
 }

@@ -15,6 +15,7 @@ from app.bedrock import BedrockClient
 from app.config import Settings
 from app.embedder import Embedder
 from app.indexing import index_vault
+from app.citations import resolve_wikilinks
 from app.rag import RagPipeline
 from app.store import NoteStore
 from app.usage import UsageStore
@@ -92,6 +93,7 @@ def _respond(message: str, history: list[dict], arc: str, session: str, tag: str
         k=k,
         history=history,
     )
+    answer = resolve_wikilinks(answer, pipeline.wiki_base_url)
     return f"{answer}\n\n{sources}" if sources else answer
 
 

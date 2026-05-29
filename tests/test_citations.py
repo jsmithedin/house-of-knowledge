@@ -1,4 +1,4 @@
-from app.citations import build_wiki_url, format_sources_section
+from app.citations import build_wiki_url, format_sources_section, resolve_wikilinks
 
 
 def test_build_wiki_url():
@@ -21,3 +21,18 @@ def test_format_sources_section():
     assert "Session 42 — Unmasking the Ritual" in md
     assert "sessions/2025-02-04-unmasking" in md
     assert "Session 38 — Exploring the Manor" in md
+
+
+def test_resolve_wikilinks_simple():
+    result = resolve_wikilinks("See [[Thornvale]] for more.", "https://example.com/wiki")
+    assert result == "See [Thornvale](https://example.com/wiki/Thornvale) for more."
+
+
+def test_resolve_wikilinks_with_label():
+    result = resolve_wikilinks("Visit [[Thornvale|the village]].", "https://example.com/wiki")
+    assert result == "Visit [the village](https://example.com/wiki/Thornvale)."
+
+
+def test_resolve_wikilinks_no_wikilinks():
+    text = "No links here."
+    assert resolve_wikilinks(text, "https://example.com/wiki") == text

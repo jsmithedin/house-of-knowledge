@@ -1,5 +1,24 @@
 
 
+import re
+
+
+def resolve_wikilinks(text: str, wiki_base_url: str) -> str:
+    """Convert [[Page]] and [[Page|Label]] wikilinks to markdown links."""
+    base = wiki_base_url.rstrip("/")
+
+    def replace(m: re.Match) -> str:
+        inner = m.group(1)
+        if "|" in inner:
+            page, label = inner.split("|", 1)
+        else:
+            page = label = inner
+        url = f"{base}/{page.strip()}"
+        return f"[{label.strip()}]({url})"
+
+    return re.sub(r"\[\[([^\]]+)\]\]", replace, text)
+
+
 def build_wiki_url(wiki_base_url: str, source_path: str) -> str:
     path = source_path.removesuffix(".md")
     return f"{wiki_base_url.rstrip('/')}/{path}"
