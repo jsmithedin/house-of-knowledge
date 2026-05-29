@@ -1,0 +1,23 @@
+from app.citations import build_wiki_url, format_sources_section
+
+
+def test_build_wiki_url():
+    url = build_wiki_url(
+        "https://wordlewarriors.github.io/normal-door-opening",
+        "sessions/2025-02-04-unmasking.md",
+    )
+    assert url == "https://wordlewarriors.github.io/normal-door-opening/sessions/2025-02-04-unmasking"
+
+
+def test_format_sources_section():
+    chunks = [
+        {"session": "42", "heading": "Unmasking the Ritual", "source_path": "sessions/2025-02-04-unmasking.md"},
+        {"session": "38", "heading": "Exploring the Manor", "source_path": "sessions/2024-12-03-manor.md"},
+    ]
+    md = format_sources_section(
+        "https://wordlewarriors.github.io/normal-door-opening", chunks
+    )
+    assert "**Sources:**" in md
+    assert "Session 42 — Unmasking the Ritual" in md
+    assert "sessions/2025-02-04-unmasking" in md
+    assert "Session 38 — Exploring the Manor" in md
