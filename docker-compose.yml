@@ -1,0 +1,11 @@
+services:
+  app:
+    build: .
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./data/obsidian:/app/data/obsidian:ro
+      - ./data/chromadb:/app/data/chromadb
+      - ./scripts:/app/scripts:ro
+    env_file: .env
+    restart: unless-stopped
