@@ -1,4 +1,3 @@
-import json
 import logging
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -19,38 +18,84 @@ class InvokeResult:
     output_tokens: int
 
 
+def _build_tool_config(tools: list[dict]) -> dict:
+    """Convert internal tool defs (Anthropic-style input_schema) to Converse toolConfig."""
+    return {
+        "tools": [
+            {
+                "toolSpec": {
+                    "name": tool["name"],
+                    "description": tool["description"],
+                    "inputSchema": {"json": tool["input_schema"]},
+                }
+            }
+            for tool in tools
+        ]
+    }
+
+
+def _normalize_messages(messages: list[dict]) -> list[dict]:
+    """Accept Converse or legacy Anthropic message blocks."""
+    normalized = []
+    for msg in messages:
+        content = []
+        for block in msg["content"]:
+            if "text" in block:
+                content.append({"text": block["text"]})
+            elif block.get("type") == "text":
+                content.append({"text": block["text"]})
+            elif "toolResult" in block:
+                content.append(block)
+            else:
+                content.append(block)
+        normalized.append({"role": msg["role"], "content": content})
+    return normalized
+
+
+def _extract_text(content: list[dict]) -> str:
+    for block in content:
+        if "text" in block:
+            return block["text"]
+    raise BedrockError("No text block in model response")
+
+
+def _usage_tokens(response: dict) -> tuple[int, int]:
+    usage = response.get("usage") or {}
+    return int(usage.get("inputTokens", 0)), int(usage.get("outputTokens", 0))
+
+
 class BedrockClient:
+    """Bedrock Runtime client using the unified Converse API."""
+
     def __init__(self, model_id: str, region: str):
         self.model_id = model_id
         self._client = boto3.client("bedrock-runtime", region_name=region)
 
     def invoke(self, system_prompt: str, user_message: str) -> InvokeResult:
-        body = {
-            "messages": [
-                {"role": "user", "content": [{"type": "text", "text": user_message}]},
-            ],
-            "system": [{"type": "text", "text": system_prompt}],
-            "max_tokens": 2048,
-            "anthropic_version": "bedrock-2023-05-31",
-        }
         try:
-            response = self._client.invoke_model(
+            response = self._client.converse(
                 modelId=self.model_id,
-                body=json.dumps(body),
-            )
-            result = json.loads(response["body"].read())
-            text = result["content"][0]["text"]
-            usage = result.get("usage") or {}
-            if "usage" not in result:
-                log.warning("Bedrock response missing usage metadata")
-            return InvokeResult(
-                text=text,
-                input_tokens=int(usage.get("input_tokens", 0)),
-                output_tokens=int(usage.get("output_tokens", 0)),
+                system=[{"text": system_prompt}],
+                messages=[
+                    {"role": "user", "content": [{"text": user_message}]},
+                ],
+                inferenceConfig={"maxTokens": 2048},
             )
         except Exception as e:
-            log.exception("Bedrock invoke failed")
+            log.exception("Bedrock converse failed (model_id=%s)", self.model_id)
             raise BedrockError(str(e)) from e
+
+        stop_reason = response.get("stopReason")
+        if stop_reason != "end_turn":
+            raise BedrockError(f"Unexpected stopReason: {stop_reason!r}")
+
+        message = response["output"]["message"]
+        input_tokens, output_tokens = _usage_tokens(response)
+        return InvokeResult(
+            text=_extract_text(message["content"]),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
 
     def invoke_with_tools(
         self,
@@ -60,47 +105,57 @@ class BedrockClient:
         tool_executor: Callable[[str, dict], str],
         max_iterations: int = 5,
     ) -> InvokeResult:
-        messages = list(initial_messages)
+        messages = _normalize_messages(initial_messages)
+        tool_config = _build_tool_config(tools)
         total_input = total_output = 0
 
         for _ in range(max_iterations):
-            body = {
-                "messages": messages,
-                "system": [{"type": "text", "text": system_prompt}],
-                "tools": tools,
-                "max_tokens": 2048,
-                "anthropic_version": "bedrock-2023-05-31",
-            }
             try:
-                response = self._client.invoke_model(
+                response = self._client.converse(
                     modelId=self.model_id,
-                    body=json.dumps(body),
+                    system=[{"text": system_prompt}],
+                    messages=messages,
+                    toolConfig=tool_config,
+                    inferenceConfig={"maxTokens": 2048},
                 )
-                resp = json.loads(response["body"].read())
             except Exception as e:
-                log.exception("Bedrock invoke_with_tools failed")
+                log.exception(
+                    "Bedrock converse with tools failed (model_id=%s)", self.model_id
+                )
                 raise BedrockError(str(e)) from e
 
-            usage = resp.get("usage") or {}
-            total_input += int(usage.get("input_tokens", 0))
-            total_output += int(usage.get("output_tokens", 0))
+            input_tokens, output_tokens = _usage_tokens(response)
+            total_input += input_tokens
+            total_output += output_tokens
 
-            if resp["stop_reason"] == "end_turn":
-                text = next(b["text"] for b in resp["content"] if b["type"] == "text")
-                return InvokeResult(text=text, input_tokens=total_input, output_tokens=total_output)
-            elif resp["stop_reason"] != "tool_use":
-                raise BedrockError(f"Unexpected stop_reason: {resp['stop_reason']!r}")
+            stop_reason = response.get("stopReason")
+            output_message = response["output"]["message"]
+            messages.append(output_message)
 
-            messages.append({"role": "assistant", "content": resp["content"]})
+            if stop_reason == "end_turn":
+                return InvokeResult(
+                    text=_extract_text(output_message["content"]),
+                    input_tokens=total_input,
+                    output_tokens=total_output,
+                )
+            if stop_reason != "tool_use":
+                raise BedrockError(f"Unexpected stopReason: {stop_reason!r}")
+
             tool_results = []
-            for block in resp["content"]:
-                if block["type"] == "tool_use":
-                    result_str = tool_executor(block["name"], block["input"])
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block["id"],
-                        "content": result_str,
-                    })
+            for block in output_message["content"]:
+                if "toolUse" not in block:
+                    continue
+                tool_use = block["toolUse"]
+                result_str = tool_executor(tool_use["name"], tool_use["input"])
+                tool_results.append({
+                    "toolResult": {
+                        "toolUseId": tool_use["toolUseId"],
+                        "content": [{"text": result_str}],
+                        "status": "success",
+                    }
+                })
+            if not tool_results:
+                raise BedrockError("stopReason tool_use but no toolUse blocks in response")
             messages.append({"role": "user", "content": tool_results})
 
         raise BedrockError(f"Max iterations ({max_iterations}) reached without end_turn")

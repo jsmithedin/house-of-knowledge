@@ -12,7 +12,7 @@ if str(_root) not in sys.path:
 import streamlit as st
 
 from app.bedrock import BedrockClient
-from app.config import Settings
+from app.config import HAIKU_MODEL_ID, MODEL_LABELS, NOVA_LITE_MODEL_ID, Settings
 from app.embedder import Embedder
 from app.indexing import index_vault
 from app.citations import resolve_wikilinks
@@ -65,26 +65,41 @@ def _start_reindex_server(settings: Settings, embedder: Embedder) -> None:
 
 
 @st.cache_resource
-def _load_pipeline() -> tuple[RagPipeline, NoteStore]:
+def _load_pipeline() -> tuple[RagPipeline, NoteStore, dict[str, BedrockClient]]:
     settings = Settings()
     embedder = Embedder()
     store = NoteStore(chroma_dir=settings.chroma_dir, collection_name=settings.collection_name)
-    bedrock = BedrockClient(model_id=settings.bedrock_model_id, region=settings.aws_region)
+    bedrock_clients = {
+        NOVA_LITE_MODEL_ID: BedrockClient(model_id=NOVA_LITE_MODEL_ID, region=settings.aws_region),
+        HAIKU_MODEL_ID: BedrockClient(model_id=HAIKU_MODEL_ID, region=settings.aws_region),
+    }
+    default_bedrock = bedrock_clients.get(
+        settings.bedrock_model_id, bedrock_clients[NOVA_LITE_MODEL_ID]
+    )
     usage_store = UsageStore(settings.usage_db_path)
     usage_store.rollup_stale_months()
     pipeline = RagPipeline(
         store=store,
         embedder=embedder,
-        bedrock=bedrock,
+        bedrock=default_bedrock,
         wiki_base_url=settings.wiki_base_url,
         chat_history_window=settings.chat_history_window,
         usage_store=usage_store,
     )
     _start_reindex_server(settings, embedder)
-    return pipeline, store
+    return pipeline, store, bedrock_clients
 
 
-def _respond(message: str, history: list[dict], arc: str, session: str, tag: str, k: int, agentic: bool) -> str:
+def _respond(
+    message: str,
+    history: list[dict],
+    arc: str,
+    session: str,
+    tag: str,
+    k: int,
+    agentic: bool,
+    bedrock: BedrockClient,
+) -> str:
     answer, sources = pipeline.query(
         message=message,
         arc=arc,
@@ -93,6 +108,7 @@ def _respond(message: str, history: list[dict], arc: str, session: str, tag: str
         k=k,
         history=history,
         agentic=agentic,
+        bedrock=bedrock,
     )
     answer = resolve_wikilinks(answer, pipeline.wiki_base_url)
     return f"{answer}\n\n{sources}" if sources else answer
@@ -104,7 +120,14 @@ st.set_page_config(
     layout="wide",
 )
 
-pipeline, store = _load_pipeline()
+pipeline, store, bedrock_clients = _load_pipeline()
+
+_MODEL_OPTIONS = [NOVA_LITE_MODEL_ID, HAIKU_MODEL_ID]
+_default_model_idx = (
+    _MODEL_OPTIONS.index(pipeline.bedrock.model_id)
+    if pipeline.bedrock.model_id in _MODEL_OPTIONS
+    else 0
+)
 
 st.title("🎲 Normal Door Opening — Campaign Lore")
 
@@ -112,7 +135,7 @@ if store.count == 0:
     st.warning(EMPTY_BANNER_MSG)
 
 distinct = store.get_distinct_metadata()
-col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1, 2])
+col1, col2, col3, col4, col5, col6 = st.columns([2, 2, 2, 1, 2, 2])
 with col1:
     arc = st.selectbox("Arc", ["All"] + distinct["arcs"], index=0)
 with col2:
@@ -123,6 +146,15 @@ with col4:
     k = st.slider("k (chunks)", min_value=1, max_value=15, value=5)
 with col5:
     rag_mode = st.radio("RAG mode", ["Standard", "Agentic"], horizontal=True)
+with col6:
+    model_label = st.radio(
+        "Model",
+        [MODEL_LABELS[mid] for mid in _MODEL_OPTIONS],
+        index=_default_model_idx,
+        horizontal=True,
+    )
+model_id = next(mid for mid, label in MODEL_LABELS.items() if label == model_label)
+selected_bedrock = bedrock_clients[model_id]
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -139,7 +171,16 @@ if prompt := st.chat_input("Type your question..."):
     history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[:-1]]
     with st.chat_message("assistant"):
         with st.spinner("Searching notes..."):
-            full_answer = _respond(prompt, history, arc, session, tag, int(k), agentic=(rag_mode == "Agentic"))
+            full_answer = _respond(
+                prompt,
+                history,
+                arc,
+                session,
+                tag,
+                int(k),
+                agentic=(rag_mode == "Agentic"),
+                bedrock=selected_bedrock,
+            )
         st.markdown(full_answer)
     st.session_state.messages.append({"role": "assistant", "content": full_answer})
 

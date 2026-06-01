@@ -4,7 +4,7 @@ RAG app over Obsidian D&D session notes. See `docs/superpowers/specs/2026-05-29-
 
 ## AWS setup (Bedrock)
 
-The app calls **one API**: `bedrock:InvokeModel` on the Bedrock Runtime endpoint in `eu-west-2`. Embeddings run locally on the NUC (BGE-M3) — AWS is only used for text generation.
+The app calls the Bedrock Runtime **Converse** API (`bedrock-runtime` `converse`) in `eu-west-2`. IAM still uses `bedrock:InvokeModel` on each foundation-model ARN. Embeddings run locally on the NUC (BGE-M3) — AWS is only used for text generation.
 
 ### Permissions required
 
@@ -14,7 +14,7 @@ The app calls **one API**: `bedrock:InvokeModel` on the Bedrock Runtime endpoint
 | `bedrock:InvokeModelWithResponseStream` | No | Not used |
 | S3, DynamoDB, IAM, etc. | No | Not used |
 
-Scope the IAM policy to **only the model(s) you plan to use**. Default is Amazon Nova Lite; you can swap to Claude Haiku 4.5 via `BEDROCK_MODEL_ID` in `.env`.
+Scope the IAM policy to **only the model(s) you plan to use**. The app uses the Bedrock **Converse** API and supports **Nova Lite** and **Claude Haiku 4.5** — switch between them in the UI, or set the default via `BEDROCK_MODEL_ID` in `.env`.
 
 ### Step 1: Submit Anthropic use case form (Haiku only)
 

@@ -2,6 +2,15 @@ import os
 from dataclasses import dataclass, field
 
 
+NOVA_LITE_MODEL_ID = "amazon.nova-lite-v1:0"
+HAIKU_MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
+
+MODEL_LABELS: dict[str, str] = {
+    NOVA_LITE_MODEL_ID: "Nova Lite",
+    HAIKU_MODEL_ID: "Haiku 4.5",
+}
+
+
 @dataclass(frozen=True)
 class ModelPricing:
     input_per_1m: float
@@ -10,7 +19,8 @@ class ModelPricing:
 
 # USD per 1M tokens — verify against current AWS Bedrock pricing when updating.
 MODEL_PRICING: dict[str, ModelPricing] = {
-    "amazon.nova-lite-v1:0": ModelPricing(input_per_1m=0.06, output_per_1m=0.24),
+    NOVA_LITE_MODEL_ID: ModelPricing(input_per_1m=0.06, output_per_1m=0.24),
+    HAIKU_MODEL_ID: ModelPricing(input_per_1m=1.00, output_per_1m=5.00),
     "eu.anthropic.claude-haiku-4-5-20251001-v1:0": ModelPricing(
         input_per_1m=1.00, output_per_1m=5.00
     ),
@@ -29,7 +39,7 @@ def estimate_cost_usd(model_id: str, input_tokens: int, output_tokens: int) -> f
 @dataclass(frozen=True)
 class Settings:
     bedrock_model_id: str = field(
-        default_factory=lambda: os.getenv("BEDROCK_MODEL_ID", "amazon.nova-lite-v1:0")
+        default_factory=lambda: os.getenv("BEDROCK_MODEL_ID", NOVA_LITE_MODEL_ID)
     )
     aws_region: str = field(default_factory=lambda: os.getenv("AWS_REGION", "eu-west-2"))
     wiki_base_url: str = field(
