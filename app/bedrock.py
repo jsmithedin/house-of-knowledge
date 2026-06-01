@@ -1,5 +1,6 @@
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import boto3
@@ -56,7 +57,7 @@ class BedrockClient:
         system_prompt: str,
         initial_messages: list[dict],
         tools: list[dict],
-        tool_executor,
+        tool_executor: Callable[[str, dict], str],
         max_iterations: int = 5,
     ) -> InvokeResult:
         messages = list(initial_messages)
@@ -87,6 +88,8 @@ class BedrockClient:
             if resp["stop_reason"] == "end_turn":
                 text = next(b["text"] for b in resp["content"] if b["type"] == "text")
                 return InvokeResult(text=text, input_tokens=total_input, output_tokens=total_output)
+            elif resp["stop_reason"] != "tool_use":
+                raise BedrockError(f"Unexpected stop_reason: {resp['stop_reason']!r}")
 
             messages.append({"role": "assistant", "content": resp["content"]})
             tool_results = []

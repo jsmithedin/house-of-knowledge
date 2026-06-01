@@ -226,3 +226,27 @@ def test_invoke_with_tools_boto3_exception_raises_bedrock_error():
             assert False, "Should have raised"
         except BedrockError:
             pass
+
+
+def test_invoke_with_tools_unexpected_stop_reason_raises():
+    """An unexpected stop_reason (e.g. max_tokens) raises BedrockError immediately."""
+    mock_client = MagicMock()
+    mock_client.invoke_model.return_value = {"body": _make_body(
+        content=[],
+        stop_reason="max_tokens",
+    )}
+
+    with patch("app.bedrock.boto3.client", return_value=mock_client):
+        bc = BedrockClient(model_id="claude-sonnet-4-6", region="eu-west-2")
+        try:
+            bc.invoke_with_tools(
+                "sys",
+                [{"role": "user", "content": [{"type": "text", "text": "?"}]}],
+                [],
+                lambda n, i: "r",
+            )
+            assert False, "Should have raised"
+        except BedrockError as e:
+            assert "max_tokens" in str(e)
+
+    assert mock_client.invoke_model.call_count == 1
