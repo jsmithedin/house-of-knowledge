@@ -72,7 +72,9 @@ class RagPipeline:
         k: int,
         history: list[dict],
         agentic: bool = False,
+        bedrock: BedrockClient | None = None,
     ) -> tuple[str, str]:
+        client = bedrock or self.bedrock
         where = build_where_clause(arc, session, tag)
 
         history_text = ""
@@ -82,8 +84,8 @@ class RagPipeline:
             history_text += f"{role}: {msg['content']}\n"
 
         if agentic:
-            return self._query_agentic(message, history_text, where, k)
-        return self._query_standard(message, history_text, where, k)
+            return self._query_agentic(message, history_text, where, k, client)
+        return self._query_standard(message, history_text, where, k, client)
 
     def _query_standard(
         self,
@@ -91,6 +93,7 @@ class RagPipeline:
         history_text: str,
         where: dict | None,
         k: int,
+        bedrock: BedrockClient,
     ) -> tuple[str, str]:
         embedding = self.embedder.embed_query(message)
         results = self.store.query(query_embedding=embedding, n_results=k, where=where)
@@ -118,11 +121,11 @@ class RagPipeline:
         user_message += f"Retrieved session notes:\n{context}\n\nQuestion: {message}"
 
         try:
-            result = self.bedrock.invoke(SYSTEM_PROMPT, user_message)
+            result = bedrock.invoke(SYSTEM_PROMPT, user_message)
         except BedrockError:
             return ("Generation failed — try again.", "")
 
-        self._record_usage(result.input_tokens, result.output_tokens)
+        self._record_usage(bedrock, result.input_tokens, result.output_tokens)
         sources = format_sources_section(self.wiki_base_url, metadatas)
         return (result.text, sources)
 
@@ -132,6 +135,7 @@ class RagPipeline:
         history_text: str,
         where: dict | None,
         k: int,
+        bedrock: BedrockClient,
     ) -> tuple[str, str]:
         all_metadatas: list[dict] = []
 
@@ -161,11 +165,11 @@ class RagPipeline:
         user_content += f"Question: {message}"
 
         initial_messages = [
-            {"role": "user", "content": [{"type": "text", "text": user_content}]}
+            {"role": "user", "content": [{"text": user_content}]},
         ]
 
         try:
-            result = self.bedrock.invoke_with_tools(
+            result = bedrock.invoke_with_tools(
                 system_prompt=AGENTIC_SYSTEM_PROMPT,
                 initial_messages=initial_messages,
                 tools=[SEARCH_TOOL],
@@ -174,14 +178,16 @@ class RagPipeline:
         except BedrockError:
             return ("Generation failed — try again.", "")
 
-        self._record_usage(result.input_tokens, result.output_tokens)
+        self._record_usage(bedrock, result.input_tokens, result.output_tokens)
         sources = format_sources_section(self.wiki_base_url, all_metadatas)
         return (result.text, sources)
 
-    def _record_usage(self, input_tokens: int, output_tokens: int) -> None:
+    def _record_usage(
+        self, bedrock: BedrockClient, input_tokens: int, output_tokens: int
+    ) -> None:
         if self.usage_store is None:
             return
         try:
-            self.usage_store.record_event(self.bedrock.model_id, input_tokens, output_tokens)
+            self.usage_store.record_event(bedrock.model_id, input_tokens, output_tokens)
         except Exception:
             log.exception("Failed to record token usage")
