@@ -84,7 +84,7 @@ def _load_pipeline() -> tuple[RagPipeline, NoteStore]:
     return pipeline, store
 
 
-def _respond(message: str, history: list[dict], arc: str, session: str, tag: str, k: int) -> str:
+def _respond(message: str, history: list[dict], arc: str, session: str, tag: str, k: int, agentic: bool) -> str:
     answer, sources = pipeline.query(
         message=message,
         arc=arc,
@@ -92,6 +92,7 @@ def _respond(message: str, history: list[dict], arc: str, session: str, tag: str
         tag=tag,
         k=k,
         history=history,
+        agentic=agentic,
     )
     answer = resolve_wikilinks(answer, pipeline.wiki_base_url)
     return f"{answer}\n\n{sources}" if sources else answer
@@ -111,7 +112,7 @@ if store.count == 0:
     st.warning(EMPTY_BANNER_MSG)
 
 distinct = store.get_distinct_metadata()
-col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1, 2])
 with col1:
     arc = st.selectbox("Arc", ["All"] + distinct["arcs"], index=0)
 with col2:
@@ -120,6 +121,8 @@ with col3:
     tag = st.selectbox("Tag", ["All"] + distinct["tags"], index=0)
 with col4:
     k = st.slider("k (chunks)", min_value=1, max_value=15, value=5)
+with col5:
+    rag_mode = st.radio("RAG mode", ["Standard", "Agentic"], horizontal=True)
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
@@ -136,7 +139,7 @@ if prompt := st.chat_input("Type your question..."):
     history = [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages[:-1]]
     with st.chat_message("assistant"):
         with st.spinner("Searching notes..."):
-            full_answer = _respond(prompt, history, arc, session, tag, int(k))
+            full_answer = _respond(prompt, history, arc, session, tag, int(k), agentic=(rag_mode == "Agentic"))
         st.markdown(full_answer)
     st.session_state.messages.append({"role": "assistant", "content": full_answer})
 
