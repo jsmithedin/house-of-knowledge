@@ -152,7 +152,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env  # fill in AWS credentials
 pytest -v
-python app/main.py
+streamlit run app/main.py --server.port=7860
 ```
 
 ## Deploy (NUC)
