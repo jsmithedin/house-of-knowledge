@@ -1,0 +1,3 @@
+tabulate==0.9.0
+# ragas pinned for future RAGAS-native integration; judge.py currently uses fallback
+# ragas==0.2.6

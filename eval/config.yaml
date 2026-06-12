@@ -1,0 +1,12 @@
+models:
+  - nova-lite    # -> app.config.NOVA_LITE_MODEL_ID = "amazon.nova-lite-v1:0"
+  - haiku-4.5   # -> app.config.HAIKU_MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
+                 # NOTE: if .env sets BEDROCK_MODEL_ID to the eu. inference profile
+                 # ("eu.anthropic.claude-haiku-4-5-20251001-v1:0"), update HAIKU_MODEL_ID
+                 # in app/config.py and re-pin here
+k: 5
+# Judge model: strongest available in eu-west-2 that is NOT in the evaluated families.
+# Family-conflict: do not use nova-lite or haiku to judge nova-lite/haiku answers.
+# Verify availability: aws bedrock list-foundation-models --region eu-west-2 --query 'modelSummaries[*].modelId'
+judge_model: eu.anthropic.claude-3-5-sonnet-20241022-v2:0
+faithfulness_threshold: 1.0
