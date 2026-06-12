@@ -11,7 +11,7 @@ This is an evaluation harness for comparing two Amazon Bedrock models — Nova L
 - **Python dependencies**: install eval-specific packages on top of the existing requirements:
 
 ```bash
-pip install -r eval/requirements-eval.txt
+uv sync --extra eval
 ```
 
 ## 3. Writing the golden set
@@ -48,13 +48,13 @@ All stages use `--run-id` to identify a run. Use a descriptive ID such as `2026-
 
 | Stage | Command | Output |
 |-------|---------|--------|
-| 1 (💰 costs money) | `python -m eval.runner --run-id YYYY-MM-DD-name` | `eval/runs/<id>/results.jsonl` |
-| 2 (free) | `python -m eval.score_retrieval --run-id YYYY-MM-DD-name` | `eval/runs/<id>/retrieval_scores.jsonl` |
-| 3 (free) | `python -m eval.make_blind --run-id YYYY-MM-DD-name` | `eval/runs/<id>/blind/pack.jsonl`, `eval/runs/<id>/blind/private/mapping.json` |
-| 4 (free) | `streamlit run eval/scoring_app.py -- --run-id YYYY-MM-DD-name` | `eval/runs/<id>/blind/scores.jsonl` |
-| 5 (free) | `python -m eval.unmask --run-id YYYY-MM-DD-name` | `eval/runs/<id>/scored.jsonl` |
-| 6 (💰 costs money) | `python -m eval.judge --run-id YYYY-MM-DD-name` | `eval/runs/<id>/judge_scores.jsonl` |
-| 7 (free) | `python -m eval.report --run-id YYYY-MM-DD-name` | `eval/runs/<id>/report.md` |
+| 1 (💰 costs money) | `uv run python -m eval.runner --run-id YYYY-MM-DD-name` | `eval/runs/<id>/results.jsonl` |
+| 2 (free) | `uv run python -m eval.score_retrieval --run-id YYYY-MM-DD-name` | `eval/runs/<id>/retrieval_scores.jsonl` |
+| 3 (free) | `uv run python -m eval.make_blind --run-id YYYY-MM-DD-name` | `eval/runs/<id>/blind/pack.jsonl`, `eval/runs/<id>/blind/private/mapping.json` |
+| 4 (free) | `uv run streamlit run eval/scoring_app.py -- --run-id YYYY-MM-DD-name` | `eval/runs/<id>/blind/scores.jsonl` |
+| 5 (free) | `uv run python -m eval.unmask --run-id YYYY-MM-DD-name` | `eval/runs/<id>/scored.jsonl` |
+| 6 (💰 costs money) | `uv run python -m eval.judge --run-id YYYY-MM-DD-name` | `eval/runs/<id>/judge_scores.jsonl` |
+| 7 (free) | `uv run python -m eval.report --run-id YYYY-MM-DD-name` | `eval/runs/<id>/report.md` |
 
 Stages 1 and 6 make Bedrock API calls and incur cost. All other stages are pure Python with no network calls.
 
@@ -63,7 +63,7 @@ Stages 1 and 6 make Bedrock API calls and incur cost. All other stages are pure 
 **How to run:**
 
 ```bash
-streamlit run eval/scoring_app.py -- --run-id <id>
+uv run streamlit run eval/scoring_app.py -- --run-id <id>
 ```
 
 Open the URL shown in the terminal. The app presents each answer labelled A or B with no model name visible.
@@ -107,7 +107,7 @@ Open the URL shown in the terminal. The app presents each answer labelled A or B
 **Smoke test:** use `--limit 2` to run only the first 2 queries before committing to a full run:
 
 ```bash
-python -m eval.runner --run-id 2026-06-15-smoke --limit 2
+uv run python -m eval.runner --run-id 2026-06-15-smoke --limit 2
 ```
 
 **What invalidates a run:** the following changes mean the existing results are no longer comparable and you should start a new run with a new `--run-id`:
