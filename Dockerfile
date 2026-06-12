@@ -18,7 +18,4 @@ COPY app/ app/
 COPY scripts/ scripts/
 
 EXPOSE 7860
-CMD ["uv", "run", "streamlit", "run", "app/main.py",
-     "--server.port=7860",
-     "--server.address=0.0.0.0",
-     "--server.headless=true"]
+CMD ["uv", "run", "streamlit", "run", "app/main.py", "--server.port=7860", "--server.address=0.0.0.0", "--server.headless=true"]
