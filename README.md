@@ -169,3 +169,5 @@ From Mac after a session:
 ```bash
 VAULT_PATH=~/path/to/vault NUC_HOST=nuc.local ./scripts/sync-and-index.sh
 ```
+
+For model evaluation, see [eval/README.md](eval/README.md).
