@@ -315,3 +315,71 @@ def test_agentic_query_skips_usage_on_error():
 
     assert "Generation failed" in answer
     usage.record_event.assert_not_called()
+
+
+from app.rag import build_context, build_user_message
+
+
+def test_build_context_single_chunk():
+    docs = ["The heist went wrong."]
+    metas = [{"session": "12", "heading": "The Heist", "date": "2025-03-01"}]
+    result = build_context(docs, metas)
+    assert result == "[Session 12 — The Heist (2025-03-01)]\nThe heist went wrong."
+
+
+def test_build_context_multiple_chunks_joined_by_separator():
+    docs = ["Doc A.", "Doc B."]
+    metas = [
+        {"session": "1", "heading": "A", "date": "2025-01-01"},
+        {"session": "2", "heading": "B", "date": "2025-02-01"},
+    ]
+    result = build_context(docs, metas)
+    assert "---" in result
+    assert "[Session 1 — A (2025-01-01)]\nDoc A." in result
+    assert "[Session 2 — B (2025-02-01)]\nDoc B." in result
+
+
+def test_build_context_missing_meta_fields_use_question_mark():
+    docs = ["Content."]
+    metas = [{}]
+    result = build_context(docs, metas)
+    assert "[Session ? — ? (?)]" in result
+
+
+def test_build_user_message_no_history():
+    msg = build_user_message("", "context text", "Who is Ivaran?")
+    assert msg == "Retrieved session notes:\ncontext text\n\nQuestion: Who is Ivaran?"
+    assert "Conversation so far" not in msg
+
+
+def test_build_user_message_with_history():
+    msg = build_user_message("User: Hi\nAssistant: Hello\n", "context text", "Follow-up?")
+    assert msg.startswith("Conversation so far:\nUser: Hi\nAssistant: Hello\n")
+    assert "Retrieved session notes:\ncontext text" in msg
+    assert "Question: Follow-up?" in msg
+
+
+def test_query_standard_uses_build_context_and_build_user_message(monkeypatch):
+    """Both models calling via harness get byte-identical user_message for same query."""
+    from app.rag import build_context, build_user_message, SYSTEM_PROMPT
+    docs = ["Lore."]
+    metas = [{"session": "1", "heading": "H", "date": "2025-01-01", "source_path": "sessions/note.md", "arc": "A", "tags": ""}]
+    expected_context = build_context(docs, metas)
+    expected_msg = build_user_message("", expected_context, "Q?")
+
+    store = MagicMock()
+    store.query.return_value = {"documents": [docs], "metadatas": [metas]}
+    embedder = MagicMock()
+    embedder.embed_query.return_value = [0.1] * 8
+    bedrock = MagicMock()
+    bedrock.invoke.return_value = InvokeResult(text="Answer", input_tokens=1, output_tokens=1)
+
+    pipeline = RagPipeline(
+        store=store, embedder=embedder, bedrock=bedrock,
+        wiki_base_url="https://example.com", chat_history_window=8,
+    )
+    pipeline.query("Q?", arc=None, session=None, tag=None, k=5, history=[])
+
+    call_args = bedrock.invoke.call_args
+    assert call_args[0][0] == SYSTEM_PROMPT
+    assert call_args[0][1] == expected_msg

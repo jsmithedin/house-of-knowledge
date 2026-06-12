@@ -46,6 +46,24 @@ SEARCH_TOOL = {
 }
 
 
+def build_context(documents: list[str], metadatas: list[dict]) -> str:
+    context_parts = []
+    for doc, meta in zip(documents, metadatas):
+        context_parts.append(
+            f"[Session {meta.get('session', '?')} — {meta.get('heading', '?')} "
+            f"({meta.get('date', '?')})]\n{doc}"
+        )
+    return "\n\n---\n\n".join(context_parts)
+
+
+def build_user_message(history_text: str, context: str, message: str) -> str:
+    user_message = ""
+    if history_text:
+        user_message += f"Conversation so far:\n{history_text}\n"
+    user_message += f"Retrieved session notes:\n{context}\n\nQuestion: {message}"
+    return user_message
+
+
 class RagPipeline:
     def __init__(
         self,
@@ -107,18 +125,8 @@ class RagPipeline:
                 "",
             )
 
-        context_parts = []
-        for doc, meta in zip(documents, metadatas):
-            context_parts.append(
-                f"[Session {meta.get('session', '?')} — {meta.get('heading', '?')} "
-                f"({meta.get('date', '?')})]\n{doc}"
-            )
-        context = "\n\n---\n\n".join(context_parts)
-
-        user_message = ""
-        if history_text:
-            user_message += f"Conversation so far:\n{history_text}\n"
-        user_message += f"Retrieved session notes:\n{context}\n\nQuestion: {message}"
+        context = build_context(documents, metadatas)
+        user_message = build_user_message(history_text, context, message)
 
         try:
             result = bedrock.invoke(SYSTEM_PROMPT, user_message)

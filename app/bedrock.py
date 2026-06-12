@@ -71,7 +71,13 @@ class BedrockClient:
         self.model_id = model_id
         self._client = boto3.client("bedrock-runtime", region_name=region)
 
-    def invoke(self, system_prompt: str, user_message: str) -> InvokeResult:
+    def invoke(
+        self,
+        system_prompt: str,
+        user_message: str,
+        inference_config: dict | None = None,
+    ) -> InvokeResult:
+        cfg = inference_config if inference_config is not None else {"maxTokens": 2048}
         try:
             response = self._client.converse(
                 modelId=self.model_id,
@@ -79,7 +85,7 @@ class BedrockClient:
                 messages=[
                     {"role": "user", "content": [{"text": user_message}]},
                 ],
-                inferenceConfig={"maxTokens": 2048},
+                inferenceConfig=cfg,
             )
         except Exception as e:
             log.exception("Bedrock converse failed (model_id=%s)", self.model_id)

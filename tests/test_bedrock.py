@@ -325,3 +325,27 @@ def test_invoke_with_tools_accepts_legacy_anthropic_message_blocks():
 
     messages = mock_client.converse.call_args[1]["messages"]
     assert messages[0]["content"][0] == {"text": "legacy"}
+
+
+def test_invoke_uses_default_inference_config_when_none():
+    mock_client = MagicMock()
+    mock_client.converse.return_value = _converse_response("Answer")
+
+    with patch("app.bedrock.boto3.client", return_value=mock_client):
+        bc = BedrockClient(model_id="amazon.nova-lite-v1:0", region="eu-west-2")
+        bc.invoke("sys", "user")
+
+    call_kwargs = mock_client.converse.call_args[1]
+    assert call_kwargs["inferenceConfig"] == {"maxTokens": 2048}
+
+
+def test_invoke_uses_provided_inference_config():
+    mock_client = MagicMock()
+    mock_client.converse.return_value = _converse_response("Answer")
+
+    with patch("app.bedrock.boto3.client", return_value=mock_client):
+        bc = BedrockClient(model_id="amazon.nova-lite-v1:0", region="eu-west-2")
+        bc.invoke("sys", "user", inference_config={"maxTokens": 2048, "temperature": 0.0})
+
+    call_kwargs = mock_client.converse.call_args[1]
+    assert call_kwargs["inferenceConfig"] == {"maxTokens": 2048, "temperature": 0.0}
