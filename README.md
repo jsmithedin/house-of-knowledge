@@ -148,11 +148,10 @@ At expected usage (~5 users, weekly sessions), Nova Lite costs well under $1/mon
 ## Quick start (local dev)
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
+uv sync
 cp .env.example .env  # fill in AWS credentials
-pytest -v
-streamlit run app/main.py --server.port=7860
+uv run pytest -v
+uv run streamlit run app/main.py --server.port=7860
 ```
 
 ## Deploy (NUC)
