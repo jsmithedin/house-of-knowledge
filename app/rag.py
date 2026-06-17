@@ -168,13 +168,13 @@ class RagPipeline:
                 return "Unknown tool."
             query = tool_input["query"]
             n = min(max(int(tool_input.get("k", k)), 1), 10)
+            tool_span = trace.span("tool-call", {"query": query})
             embedding = self.embedder.embed_query(query)
             results = self.store.query(query_embedding=embedding, n_results=n, where=where)
             docs = results["documents"][0]
             metas = results["metadatas"][0]
             all_metadatas.extend(metas)
-            tool_span = trace.span("tool-call", {"query": query, "doc_count": len(docs)})
-            tool_span.end()
+            tool_span.end(output={"doc_count": len(docs)})
             if not docs:
                 return "No results found for that query."
             parts = []
