@@ -48,7 +48,9 @@ class _Span:
 
     def end(self, output=None, **_):
         try:
-            self._span.end(output=output)
+            if output is not None:
+                self._span.update(output=output)
+            self._span.end()
         except Exception:
             log.debug("Langfuse span.end failed", exc_info=True)
 
@@ -59,36 +61,40 @@ class _Generation:
 
     def end(self, output: str = "", input_tokens: int = 0, output_tokens: int = 0):
         try:
-            self._gen.end(
+            self._gen.update(
                 output=output,
-                usage={"input": input_tokens, "output": output_tokens},
+                usage_details={"input": input_tokens, "output": output_tokens},
             )
+            self._gen.end()
         except Exception:
             log.debug("Langfuse generation.end failed", exc_info=True)
 
 
 class _Trace:
-    def __init__(self, trace, client):
-        self._trace = trace
+    def __init__(self, root, client):
+        self._root = root
         self._client = client
 
     def span(self, name: str, input: dict | None = None) -> _Span | _NoopObj:
         try:
-            return _Span(self._trace.span(name=name, input=input or {}))
+            return _Span(self._root.start_observation(name=name, as_type="span", input=input or {}))
         except Exception:
             log.debug("Langfuse span creation failed", exc_info=True)
             return _NoopObj()
 
     def generation(self, name: str, model: str, input: dict | None = None) -> _Generation | _NoopObj:
         try:
-            return _Generation(self._trace.generation(name=name, model=model, input=input or {}))
+            return _Generation(
+                self._root.start_observation(name=name, as_type="generation", model=model, input=input or {})
+            )
         except Exception:
             log.debug("Langfuse generation creation failed", exc_info=True)
             return _NoopObj()
 
     def end(self, output: str | None = None) -> None:
         try:
-            self._trace.update(output=output)
+            self._root.set_trace_io(output=output)
+            self._root.end()
             self._client.flush()
         except Exception:
             log.debug("Langfuse trace.end failed", exc_info=True)
@@ -100,8 +106,8 @@ class Tracer:
 
     def trace(self, name: str, input: dict | None = None) -> _Trace | _NoopTrace:
         try:
-            t = self._client.trace(name=name, input=input or {})
-            return _Trace(t, self._client)
+            root = self._client.start_observation(name=name, as_type="span", input=input or {})
+            return _Trace(root, self._client)
         except Exception:
             log.debug("Langfuse trace creation failed", exc_info=True)
             return _NoopTrace()
