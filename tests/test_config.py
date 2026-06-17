@@ -41,3 +41,27 @@ def test_estimate_cost_nova_lite():
 
 def test_estimate_cost_unknown_model():
     assert estimate_cost_usd("unknown.model", 1000, 1000) == 0.0
+
+
+def test_langfuse_defaults(monkeypatch):
+    monkeypatch.delenv("LANGFUSE_ENABLED", raising=False)
+    monkeypatch.delenv("LANGFUSE_HOST", raising=False)
+    monkeypatch.delenv("LANGFUSE_PUBLIC_KEY", raising=False)
+    monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
+    s = Settings()
+    assert s.langfuse_enabled is True
+    assert s.langfuse_host == "http://192.168.1.231:3000"
+    assert s.langfuse_public_key == ""
+    assert s.langfuse_secret_key == ""
+
+
+def test_langfuse_from_env(monkeypatch):
+    monkeypatch.setenv("LANGFUSE_ENABLED", "false")
+    monkeypatch.setenv("LANGFUSE_HOST", "http://my-host:3000")
+    monkeypatch.setenv("LANGFUSE_PUBLIC_KEY", "pk-test")
+    monkeypatch.setenv("LANGFUSE_SECRET_KEY", "sk-test")
+    s = Settings()
+    assert s.langfuse_enabled is False
+    assert s.langfuse_host == "http://my-host:3000"
+    assert s.langfuse_public_key == "pk-test"
+    assert s.langfuse_secret_key == "sk-test"

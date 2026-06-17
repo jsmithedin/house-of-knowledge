@@ -56,3 +56,15 @@ class Settings:
         default_factory=lambda: os.getenv("USAGE_DB_PATH", "data/usage.sqlite")
     )
     collection_name: str = "campaign_notes"
+    langfuse_enabled: bool = field(
+        default_factory=lambda: os.getenv("LANGFUSE_ENABLED", "true").lower() == "true"
+    )
+    langfuse_host: str = field(
+        default_factory=lambda: os.getenv("LANGFUSE_HOST", "http://192.168.1.231:3000")
+    )
+    langfuse_public_key: str = field(
+        default_factory=lambda: os.getenv("LANGFUSE_PUBLIC_KEY", "")
+    )
+    langfuse_secret_key: str = field(
+        default_factory=lambda: os.getenv("LANGFUSE_SECRET_KEY", "")
+    )
