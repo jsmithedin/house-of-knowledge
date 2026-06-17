@@ -60,7 +60,7 @@ class Settings:
         default_factory=lambda: os.getenv("LANGFUSE_ENABLED", "true").lower() == "true"
     )
     langfuse_host: str = field(
-        default_factory=lambda: os.getenv("LANGFUSE_HOST", "http://192.168.1.231:3000")
+        default_factory=lambda: os.getenv("LANGFUSE_HOST", "")
     )
     langfuse_public_key: str = field(
         default_factory=lambda: os.getenv("LANGFUSE_PUBLIC_KEY", "")

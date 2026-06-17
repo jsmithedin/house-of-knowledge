@@ -50,7 +50,7 @@ def test_langfuse_defaults(monkeypatch):
     monkeypatch.delenv("LANGFUSE_SECRET_KEY", raising=False)
     s = Settings()
     assert s.langfuse_enabled is True
-    assert s.langfuse_host == "http://192.168.1.231:3000"
+    assert s.langfuse_host == ""
     assert s.langfuse_public_key == ""
     assert s.langfuse_secret_key == ""
 
