@@ -18,6 +18,7 @@ from app.indexing import index_vault
 from app.citations import resolve_wikilinks
 from app.rag import RagPipeline
 from app.store import NoteStore
+from app.tracing import create_tracer
 from app.usage import UsageStore
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -78,6 +79,7 @@ def _load_pipeline() -> tuple[RagPipeline, NoteStore, dict[str, BedrockClient]]:
     )
     usage_store = UsageStore(settings.usage_db_path)
     usage_store.rollup_stale_months()
+    tracer = create_tracer(settings)
     pipeline = RagPipeline(
         store=store,
         embedder=embedder,
@@ -85,6 +87,7 @@ def _load_pipeline() -> tuple[RagPipeline, NoteStore, dict[str, BedrockClient]]:
         wiki_base_url=settings.wiki_base_url,
         chat_history_window=settings.chat_history_window,
         usage_store=usage_store,
+        tracer=tracer,
     )
     _start_reindex_server(settings, embedder)
     return pipeline, store, bedrock_clients
