@@ -4,6 +4,7 @@ from app.bedrock import BedrockClient, BedrockError
 from app.citations import format_sources_section
 from app.filters import build_where_clause
 from app.store import NoteStore
+from app.tracing import NoopTracer
 from app.usage import UsageStore
 
 log = logging.getLogger(__name__)
@@ -73,6 +74,7 @@ class RagPipeline:
         wiki_base_url: str,
         chat_history_window: int,
         usage_store: UsageStore | None = None,
+        tracer=None,
     ):
         self.store = store
         self.embedder = embedder
@@ -80,6 +82,7 @@ class RagPipeline:
         self.wiki_base_url = wiki_base_url
         self.chat_history_window = chat_history_window
         self.usage_store = usage_store
+        self.tracer = tracer if tracer is not None else NoopTracer()
 
     def query(
         self,
@@ -113,13 +116,20 @@ class RagPipeline:
         k: int,
         bedrock: BedrockClient,
     ) -> tuple[str, str]:
-        embedding = self.embedder.embed_query(message)
-        results = self.store.query(query_embedding=embedding, n_results=k, where=where)
+        trace = self.tracer.trace("rag-query", {"query": message, "k": k, "agentic": False})
 
+        embed_span = trace.span("embed", {"query": message})
+        embedding = self.embedder.embed_query(message)
+        embed_span.end()
+
+        retrieve_span = trace.span("retrieve", {"k": k, "where": str(where)})
+        results = self.store.query(query_embedding=embedding, n_results=k, where=where)
         documents = results["documents"][0]
         metadatas = results["metadatas"][0]
+        retrieve_span.end(output={"doc_count": len(documents)})
 
         if not documents:
+            trace.end("no_results")
             return (
                 "No matching notes found. Try broadening your filters or rephrasing.",
                 "",
@@ -128,13 +138,18 @@ class RagPipeline:
         context = build_context(documents, metadatas)
         user_message = build_user_message(history_text, context, message)
 
+        gen = trace.generation("generate", bedrock.model_id, {"user": user_message})
         try:
             result = bedrock.invoke(SYSTEM_PROMPT, user_message)
         except BedrockError:
+            gen.end(output="generation_failed")
+            trace.end("generation_failed")
             return ("Generation failed — try again.", "")
+        gen.end(output=result.text, input_tokens=result.input_tokens, output_tokens=result.output_tokens)
 
         self._record_usage(bedrock, result.input_tokens, result.output_tokens)
         sources = format_sources_section(self.wiki_base_url, metadatas)
+        trace.end(result.text)
         return (result.text, sources)
 
     def _query_agentic(
@@ -145,6 +160,7 @@ class RagPipeline:
         k: int,
         bedrock: BedrockClient,
     ) -> tuple[str, str]:
+        trace = self.tracer.trace("rag-query", {"query": message, "k": k, "agentic": True})
         all_metadatas: list[dict] = []
 
         def execute_tool(name: str, tool_input: dict) -> str:
@@ -157,6 +173,8 @@ class RagPipeline:
             docs = results["documents"][0]
             metas = results["metadatas"][0]
             all_metadatas.extend(metas)
+            tool_span = trace.span("tool-call", {"query": query, "doc_count": len(docs)})
+            tool_span.end()
             if not docs:
                 return "No results found for that query."
             parts = []
@@ -176,6 +194,7 @@ class RagPipeline:
             {"role": "user", "content": [{"text": user_content}]},
         ]
 
+        gen = trace.generation("generate", bedrock.model_id, {"query": message})
         try:
             result = bedrock.invoke_with_tools(
                 system_prompt=AGENTIC_SYSTEM_PROMPT,
@@ -184,10 +203,14 @@ class RagPipeline:
                 tool_executor=execute_tool,
             )
         except BedrockError:
+            gen.end(output="generation_failed")
+            trace.end("generation_failed")
             return ("Generation failed — try again.", "")
+        gen.end(output=result.text, input_tokens=result.input_tokens, output_tokens=result.output_tokens)
 
         self._record_usage(bedrock, result.input_tokens, result.output_tokens)
         sources = format_sources_section(self.wiki_base_url, all_metadatas)
+        trace.end(result.text)
         return (result.text, sources)
 
     def _record_usage(

@@ -1,4 +1,4 @@
-from unittest.mock import MagicMock
+from unittest.mock import ANY, MagicMock
 
 from app.bedrock import BedrockError, InvokeResult
 from app.rag import RagPipeline, SYSTEM_PROMPT
@@ -383,3 +383,156 @@ def test_query_standard_uses_build_context_and_build_user_message(monkeypatch):
     call_args = bedrock.invoke.call_args
     assert call_args[0][0] == SYSTEM_PROMPT
     assert call_args[0][1] == expected_msg
+
+
+# ── Tracing integration ───────────────────────────────────────────────────────
+
+_META_TRACE = {
+    "source_path": "sessions/note.md",
+    "heading": "Section",
+    "session": "1",
+    "arc": "A",
+    "date": "2025-01-01",
+    "tags": "",
+}
+
+
+def _pipeline_with_tracer(tracer, store=None, bedrock=None):
+    if store is None:
+        store = MagicMock()
+        store.query.return_value = {
+            "documents": [["Lore content."]],
+            "metadatas": [[_META_TRACE]],
+        }
+    if bedrock is None:
+        bedrock = MagicMock()
+        bedrock.model_id = "amazon.nova-lite-v1:0"
+        bedrock.invoke.return_value = InvokeResult(text="Answer.", input_tokens=10, output_tokens=5)
+    embedder = MagicMock()
+    embedder.embed_query.return_value = [0.1] * 8
+    return RagPipeline(
+        store=store,
+        embedder=embedder,
+        bedrock=bedrock,
+        wiki_base_url="https://example.com",
+        chat_history_window=8,
+        tracer=tracer,
+    )
+
+
+def test_standard_query_creates_trace():
+    tracer = MagicMock()
+    mock_trace = MagicMock()
+    tracer.trace.return_value = mock_trace
+
+    pipeline = _pipeline_with_tracer(tracer)
+    pipeline.query("Who is Ivaran?", arc=None, session=None, tag=None, k=5, history=[])
+
+    tracer.trace.assert_called_once_with(
+        "rag-query", {"query": "Who is Ivaran?", "k": 5, "agentic": False}
+    )
+
+
+def test_standard_query_creates_embed_and_retrieve_spans():
+    tracer = MagicMock()
+    mock_trace = MagicMock()
+    tracer.trace.return_value = mock_trace
+
+    pipeline = _pipeline_with_tracer(tracer)
+    pipeline.query("Who is Ivaran?", arc=None, session=None, tag=None, k=5, history=[])
+
+    mock_trace.span.assert_any_call("embed", {"query": "Who is Ivaran?"})
+    mock_trace.span.assert_any_call("retrieve", ANY)
+
+
+def test_standard_query_creates_generate_generation_with_model():
+    tracer = MagicMock()
+    mock_trace = MagicMock()
+    tracer.trace.return_value = mock_trace
+
+    pipeline = _pipeline_with_tracer(tracer)
+    pipeline.query("Who is Ivaran?", arc=None, session=None, tag=None, k=5, history=[])
+
+    mock_trace.generation.assert_called_once_with("generate", "amazon.nova-lite-v1:0", ANY)
+
+
+def test_standard_query_ends_trace_with_answer():
+    tracer = MagicMock()
+    mock_trace = MagicMock()
+    tracer.trace.return_value = mock_trace
+
+    pipeline = _pipeline_with_tracer(tracer)
+    pipeline.query("Who is Ivaran?", arc=None, session=None, tag=None, k=5, history=[])
+
+    mock_trace.end.assert_called_once_with("Answer.")
+
+
+def test_standard_query_ends_generation_with_token_counts():
+    tracer = MagicMock()
+    mock_trace = MagicMock()
+    mock_gen = MagicMock()
+    tracer.trace.return_value = mock_trace
+    mock_trace.generation.return_value = mock_gen
+
+    pipeline = _pipeline_with_tracer(tracer)
+    pipeline.query("Who is Ivaran?", arc=None, session=None, tag=None, k=5, history=[])
+
+    mock_gen.end.assert_called_once_with(output="Answer.", input_tokens=10, output_tokens=5)
+
+
+def test_agentic_query_creates_trace_with_agentic_flag():
+    store = MagicMock()
+    store.query.return_value = {"documents": [["Lore."]], "metadatas": [[_META_TRACE]]}
+    bedrock = MagicMock()
+    bedrock.model_id = "amazon.nova-lite-v1:0"
+    bedrock.invoke_with_tools.return_value = InvokeResult(text="Agentic answer.", input_tokens=20, output_tokens=10)
+
+    tracer = MagicMock()
+    mock_trace = MagicMock()
+    tracer.trace.return_value = mock_trace
+
+    pipeline = _pipeline_with_tracer(tracer, store=store, bedrock=bedrock)
+    pipeline.query("Who is Ivaran?", arc=None, session=None, tag=None, k=5, history=[], agentic=True)
+
+    tracer.trace.assert_called_once_with(
+        "rag-query", {"query": "Who is Ivaran?", "k": 5, "agentic": True}
+    )
+
+
+def test_agentic_query_creates_tool_call_span_per_search():
+    store = MagicMock()
+    store.query.return_value = {"documents": [["Lore."]], "metadatas": [[_META_TRACE]]}
+    bedrock = MagicMock()
+    bedrock.model_id = "amazon.nova-lite-v1:0"
+
+    def fake_invoke_with_tools(system_prompt, initial_messages, tools, tool_executor, max_iterations=5):
+        tool_executor("search_knowledge_base", {"query": "Ivaran"})
+        return InvokeResult(text="Agentic answer.", input_tokens=20, output_tokens=10)
+
+    bedrock.invoke_with_tools.side_effect = fake_invoke_with_tools
+
+    tracer = MagicMock()
+    mock_trace = MagicMock()
+    tracer.trace.return_value = mock_trace
+
+    pipeline = _pipeline_with_tracer(tracer, store=store, bedrock=bedrock)
+    pipeline.query("Who is Ivaran?", arc=None, session=None, tag=None, k=5, history=[], agentic=True)
+
+    mock_trace.span.assert_called_once_with("tool-call", {"query": "Ivaran"})
+
+
+def test_pipeline_works_without_tracer_arg():
+    """RagPipeline with no tracer uses NoopTracer and runs without error."""
+    store = MagicMock()
+    store.query.return_value = {"documents": [["Lore."]], "metadatas": [[_META_TRACE]]}
+    embedder = MagicMock()
+    embedder.embed_query.return_value = [0.1] * 8
+    bedrock = MagicMock()
+    bedrock.invoke.return_value = InvokeResult(text="Answer.", input_tokens=1, output_tokens=1)
+
+    pipeline = RagPipeline(
+        store=store, embedder=embedder, bedrock=bedrock,
+        wiki_base_url="https://example.com", chat_history_window=8,
+    )
+    answer, _ = pipeline.query("Q?", arc=None, session=None, tag=None, k=5, history=[])
+    assert "Answer." in answer
