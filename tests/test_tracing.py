@@ -48,6 +48,13 @@ def test_create_tracer_empty_secret_key_returns_noop():
     assert isinstance(create_tracer(_settings(sec="")), NoopTracer)
 
 
+def test_create_tracer_package_not_installed_returns_noop():
+    with patch("app.tracing.Langfuse", None), \
+         patch("app.tracing._tcp_reachable", return_value=True):
+        tracer = create_tracer(_settings())
+    assert isinstance(tracer, NoopTracer)
+
+
 def test_create_tracer_unreachable_host_returns_noop():
     with patch("app.tracing._tcp_reachable", return_value=False):
         tracer = create_tracer(_settings())
