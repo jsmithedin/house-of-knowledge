@@ -9,6 +9,7 @@ dependencies = [
     "boto3==1.37.29",
     "python-frontmatter==1.1.0",
     "pyyaml==6.0.2",
+    "langfuse==4.9.0",
 ]
 
 [project.optional-dependencies]
