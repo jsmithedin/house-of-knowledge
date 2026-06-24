@@ -5,8 +5,8 @@ models:
                  # ("eu.anthropic.claude-haiku-4-5-20251001-v1:0"), update HAIKU_MODEL_ID
                  # in app/config.py and re-pin here
 k: 5
-# Judge model: strongest available in eu-west-2 that is NOT in the evaluated families.
-# Family-conflict: do not use nova-lite or haiku to judge nova-lite/haiku answers.
-# Verify availability: aws bedrock list-foundation-models --region eu-west-2 --query 'modelSummaries[*].modelId'
-judge_model: eu.anthropic.claude-3-5-sonnet-20241022-v2:0
+# Judge model: outside both evaluated families (not Amazon, not Anthropic) to avoid self-preference bias.
+# Mistral Large: neutral family, cheapest neutral option in eu-west-2.
+# Confirm exact ID (Large 2 vs 3): aws bedrock list-foundation-models --region eu-west-2 --query "modelSummaries[?contains(modelId,'mistral-large')].modelId"
+judge_model: mistral.mistral-large-2407-v1:0
 faithfulness_threshold: 1.0
