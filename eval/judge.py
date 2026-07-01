@@ -16,9 +16,30 @@ Usage:
     python -m eval.judge --run-id 2026-06-15-baseline
 """
 import argparse
+import asyncio
 import json
 import math
 from pathlib import Path
+
+# --- Python 3.12+ / nest_asyncio compatibility shim (must run before ragas import) ---
+# Python 3.12 rewrote asyncio.wait_for to always open an asyncio.timeout() block,
+# which must run inside a Task. ragas applies nest_asyncio at import, and on
+# Python 3.14 that leaves current_task() as None, so every wait_for in ragas'
+# scoring path raises "Timeout should be used inside a task" and each score
+# silently becomes NaN. ragas only ever calls wait_for with timeout=None (the
+# metric timeout default), so for that case we await the awaitable directly and
+# skip the broken timeout context. A real timeout still routes to the stdlib.
+_real_wait_for = asyncio.wait_for
+
+
+async def _wait_for_compat(fut, timeout=None):
+    if timeout is None:
+        return await fut
+    return await _real_wait_for(fut, timeout)
+
+
+asyncio.wait_for = _wait_for_compat
+# --- end shim ---
 
 import yaml
 from langchain_aws import ChatBedrockConverse
