@@ -14,7 +14,7 @@ This is an evaluation harness for comparing two Amazon Bedrock models — Nova L
 uv sync --extra eval
 ```
 
-  The judge is pinned to `ragas==0.2.15` with `langchain-aws`, which resolves onto the langchain-core 0.3.x line. Do not bump RAGAS to 0.4.x: it hard-imports langchain modules that the langchain 1.x line removed, and pulls in a litellm/instructor `openai>=2` conflict.
+  The judge is pinned to `ragas==0.2.15` with `langchain-aws==0.2.27`, which resolves onto the langchain-core 0.3.x line. Two pins to leave alone: don't bump RAGAS to 0.4.x (it hard-imports langchain modules the langchain 1.x line removed, and pulls in a litellm/instructor `openai>=2` conflict), and don't bump langchain-aws past 0.2.27 (0.2.29+ requires `boto3>=1.39.7`, which conflicts with the pinned `boto3==1.37.29`).
 
 ## 3. Writing the golden set
 
