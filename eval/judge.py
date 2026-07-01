@@ -1,74 +1,63 @@
 #!/usr/bin/env python3
-"""Stage 6: LLM faithfulness judge via BedrockClient (hand-rolled fallback).
+"""Stage 6: LLM faithfulness judge via RAGAS.
+
+Scores each answer's faithfulness against its retrieved context using RAGAS'
+Faithfulness metric, driven by a neutral judge model on Bedrock (Mistral Large
+by default — see eval/config.yaml). Faithfulness is claims-supported / total
+claims, in [0, 1]; higher is better.
 
 Usage:
     python -m eval.judge --run-id 2026-06-15-baseline
 """
 import argparse
+import asyncio
 import json
-import re
+import math
 from pathlib import Path
 
 import yaml
+from langchain_aws import ChatBedrockConverse
+from ragas.dataset_schema import SingleTurnSample
+from ragas.llms import LangchainLLMWrapper
+from ragas.metrics import Faithfulness
 
-from app.bedrock import BedrockClient
 from app.config import Settings
-
-_JUDGE_SYSTEM = (
-    "You are an impartial faithfulness evaluator. "
-    "Your task is to assess whether an answer is supported by the provided context. "
-    "Do not use any knowledge outside the provided context."
-)
-
-_JUDGE_PROMPT_TMPL = """\
-Context retrieved from the knowledge base:
-<context>
-{context}
-</context>
-
-Answer to evaluate:
-<answer>
-{answer}
-</answer>
-
-Instructions:
-1. List each distinct factual claim made in the answer (ignore hedges like "the notes don't say").
-2. For each claim, determine whether it is directly supported by the context above.
-3. Return JSON only, no other text:
-{{"claims": [{{"claim": "...", "supported": true}}, ...]}}
-"""
+from eval.runner import load_golden_set
 
 
-def _build_context_from_retrieved(retrieved: list[dict]) -> str:
-    parts = []
+def _contexts_from_retrieved(retrieved: list[dict]) -> list[str]:
+    """One context string per retrieved chunk, matching RAGAS' retrieved_contexts."""
+    contexts = []
     for r in retrieved:
         doc = r.get("document", "")
         if doc:
-            parts.append(f"[{r.get('chunk_id', '')}]\n{doc}")
-    return "\n\n---\n\n".join(parts)
+            contexts.append(doc)
+    return contexts
 
 
-def _parse_claims(text: str) -> list[dict]:
-    match = re.search(r"\{.*\}", text, re.DOTALL)
-    if not match:
-        return []
-    try:
-        data = json.loads(match.group())
-        return data.get("claims", [])
-    except json.JSONDecodeError:
-        return []
+def _build_scorer(judge_model_id: str, region: str) -> Faithfulness:
+    # temperature=0 for a deterministic judge. The judge sits outside both
+    # evaluated families (Amazon, Anthropic) to avoid self-preference bias.
+    llm = ChatBedrockConverse(
+        model_id=judge_model_id,
+        region_name=region,
+        temperature=0,
+    )
+    return Faithfulness(llm=LangchainLLMWrapper(llm))
 
 
-def judge_one(client: BedrockClient, answer: str, retrieved: list[dict]) -> tuple[float, list[str]]:
-    context = _build_context_from_retrieved(retrieved)
-    prompt = _JUDGE_PROMPT_TMPL.format(context=context[:8000], answer=answer)
-    result = client.invoke(_JUDGE_SYSTEM, prompt)
-    claims = _parse_claims(result.text)
-    if not claims:
-        return 0.0, []
-    unsupported = [c["claim"] for c in claims if not c.get("supported", True)]
-    faithfulness = (len(claims) - len(unsupported)) / len(claims)
-    return round(faithfulness, 4), unsupported
+def judge_one(scorer: Faithfulness, query: str, answer: str, retrieved: list[dict]) -> float:
+    sample = SingleTurnSample(
+        user_input=query,
+        response=answer,
+        retrieved_contexts=_contexts_from_retrieved(retrieved),
+    )
+    score = asyncio.run(scorer.single_turn_ascore(sample))
+    if score is None or (isinstance(score, float) and math.isnan(score)):
+        # RAGAS returns NaN when it can't extract any claims. Treat as 0.0 so
+        # the record stays comparable and trips the unfaithful threshold.
+        return 0.0
+    return round(float(score), 4)
 
 
 def main() -> None:
@@ -85,7 +74,10 @@ def main() -> None:
 
     settings = Settings()
     judge_model_id: str = cfg["judge_model"]
-    client = BedrockClient(model_id=judge_model_id, region=settings.aws_region)
+    scorer = _build_scorer(judge_model_id, settings.aws_region)
+
+    # results.jsonl stores query_id, not the query text — join back to the golden set.
+    queries = {q["id"]: q["query"] for q in load_golden_set(eval_dir)}
 
     output_path = run_dir / "judge_scores.jsonl"
     done: set[tuple[str, str]] = set()
@@ -107,14 +99,13 @@ def main() -> None:
             if (qid, model) in done:
                 continue
 
-            faithfulness, unsupported = judge_one(client, rec["answer"], rec["retrieved"])
+            faithfulness = judge_one(scorer, queries[qid], rec["answer"], rec["retrieved"])
             score_rec = {
                 "query_id": qid,
                 "model": model,
                 "faithfulness": faithfulness,
-                "unsupported_claims": unsupported,
                 "judge_model": judge_model_id,
-                "method": "fallback",
+                "method": "ragas",
             }
             out.write(json.dumps(score_rec) + "\n")
             out.flush()

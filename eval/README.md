@@ -8,11 +8,13 @@ This is an evaluation harness for comparing two Amazon Bedrock models — Nova L
 
 - **AWS credentials** with `bedrock:InvokeModel` for both Nova Lite and Haiku 4.5. See the main [README.md](../README.md) for IAM setup — the same credentials used by the app work here.
 - **An indexed ChromaDB**: run `python scripts/index_notes.py` before running the harness. The eval runner queries the same ChromaDB collection as the app.
-- **Python dependencies**: install eval-specific packages on top of the existing requirements:
+- **Python dependencies**: install eval-specific packages on top of the existing requirements. This pulls `tabulate` for the report and RAGAS (`ragas` + `langchain-aws`) for the Stage 6 judge:
 
 ```bash
 uv sync --extra eval
 ```
+
+  The judge is pinned to `ragas==0.2.15` with `langchain-aws`, which resolves onto the langchain-core 0.3.x line. Do not bump RAGAS to 0.4.x: it hard-imports langchain modules that the langchain 1.x line removed, and pulls in a litellm/instructor `openai>=2` conflict.
 
 ## 3. Writing the golden set
 
@@ -53,7 +55,7 @@ All stages use `--run-id` to identify a run. Use a descriptive ID such as `2026-
 | 3 (free) | `uv run python -m eval.make_blind --run-id YYYY-MM-DD-name` | `eval/runs/<id>/blind/pack.jsonl`, `eval/runs/<id>/blind/private/mapping.json` |
 | 4 (free) | `uv run streamlit run eval/scoring_app.py -- --run-id YYYY-MM-DD-name` | `eval/runs/<id>/blind/scores.jsonl` |
 | 5 (free) | `uv run python -m eval.unmask --run-id YYYY-MM-DD-name` | `eval/runs/<id>/scored.jsonl` |
-| 6 (💰 costs money) | `uv run python -m eval.judge --run-id YYYY-MM-DD-name` | `eval/runs/<id>/judge_scores.jsonl` |
+| 6 (💰 costs money) | `uv run python -m eval.judge --run-id YYYY-MM-DD-name` | `eval/runs/<id>/judge_scores.jsonl` (RAGAS Faithfulness, judged by the neutral Bedrock model in `config.yaml`) |
 | 7 (free) | `uv run python -m eval.report --run-id YYYY-MM-DD-name` | `eval/runs/<id>/report.md` |
 
 Stages 1 and 6 make Bedrock API calls and incur cost. All other stages are pure Python with no network calls.
