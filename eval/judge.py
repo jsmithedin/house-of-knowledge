@@ -6,17 +6,23 @@ Faithfulness metric, driven by a neutral judge model on Bedrock (Mistral Large
 by default — see eval/config.yaml). Faithfulness is claims-supported / total
 claims, in [0, 1]; higher is better.
 
+Scoring goes through ragas.evaluate() rather than per-sample single_turn_ascore.
+evaluate() runs each sample inside a real asyncio Task via its own executor;
+single_turn_ascore driven by a bare asyncio.run trips "Timeout should be used
+inside a task" on Python 3.12+, because ragas patches the loop with nest_asyncio
+and the timeout context in asyncio.wait_for then has no current task.
+
 Usage:
     python -m eval.judge --run-id 2026-06-15-baseline
 """
 import argparse
-import asyncio
 import json
 import math
 from pathlib import Path
 
 import yaml
 from langchain_aws import ChatBedrockConverse
+from ragas import EvaluationDataset, evaluate
 from ragas.dataset_schema import SingleTurnSample
 from ragas.llms import LangchainLLMWrapper
 from ragas.metrics import Faithfulness
@@ -35,7 +41,7 @@ def _contexts_from_retrieved(retrieved: list[dict]) -> list[str]:
     return contexts
 
 
-def _build_scorer(judge_model_id: str, region: str) -> Faithfulness:
+def _build_judge_llm(judge_model_id: str, region: str) -> LangchainLLMWrapper:
     # temperature=0 for a deterministic judge. The judge sits outside both
     # evaluated families (Amazon, Anthropic) to avoid self-preference bias.
     llm = ChatBedrockConverse(
@@ -43,21 +49,21 @@ def _build_scorer(judge_model_id: str, region: str) -> Faithfulness:
         region_name=region,
         temperature=0,
     )
-    return Faithfulness(llm=LangchainLLMWrapper(llm))
+    return LangchainLLMWrapper(llm)
 
 
-def judge_one(scorer: Faithfulness, query: str, answer: str, retrieved: list[dict]) -> float:
-    sample = SingleTurnSample(
-        user_input=query,
-        response=answer,
-        retrieved_contexts=_contexts_from_retrieved(retrieved),
-    )
-    score = asyncio.run(scorer.single_turn_ascore(sample))
-    if score is None or (isinstance(score, float) and math.isnan(score)):
-        # RAGAS returns NaN when it can't extract any claims. Treat as 0.0 so
-        # the record stays comparable and trips the unfaithful threshold.
+def _clean_score(value: object) -> float:
+    """RAGAS returns NaN when it can't extract any claims. Treat as 0.0 so the
+    record stays comparable and trips the unfaithful threshold."""
+    if value is None:
         return 0.0
-    return round(float(score), 4)
+    try:
+        f = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
+    if math.isnan(f):
+        return 0.0
+    return round(f, 4)
 
 
 def main() -> None:
@@ -74,7 +80,7 @@ def main() -> None:
 
     settings = Settings()
     judge_model_id: str = cfg["judge_model"]
-    scorer = _build_scorer(judge_model_id, settings.aws_region)
+    judge_llm = _build_judge_llm(judge_model_id, settings.aws_region)
 
     # results.jsonl stores query_id, not the query text — join back to the golden set.
     queries = {q["id"]: q["query"] for q in load_golden_set(eval_dir)}
@@ -89,7 +95,11 @@ def main() -> None:
                     rec = json.loads(line)
                     done.add((rec["query_id"], rec["model"]))
 
-    with open(run_dir / "results.jsonl") as f, open(output_path, "a") as out:
+    # Collect every (query, model) answer still needing a score, in a fixed order
+    # so we can map RAGAS' row-ordered results back to their records.
+    pending: list[tuple[str, str]] = []
+    samples: list[SingleTurnSample] = []
+    with open(run_dir / "results.jsonl") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -98,18 +108,46 @@ def main() -> None:
             qid, model = rec["query_id"], rec["model"]
             if (qid, model) in done:
                 continue
+            pending.append((qid, model))
+            samples.append(
+                SingleTurnSample(
+                    user_input=queries[qid],
+                    response=rec["answer"],
+                    retrieved_contexts=_contexts_from_retrieved(rec["retrieved"]),
+                )
+            )
 
-            faithfulness = judge_one(scorer, queries[qid], rec["answer"], rec["retrieved"])
-            score_rec = {
-                "query_id": qid,
-                "model": model,
-                "faithfulness": faithfulness,
-                "judge_model": judge_model_id,
-                "method": "ragas",
-            }
-            out.write(json.dumps(score_rec) + "\n")
-            out.flush()
-            flag = "UNFAITHFUL" if faithfulness < cfg.get("faithfulness_threshold", 1.0) else "ok"
+    if not samples:
+        print("Nothing to score — all answers already judged.")
+        return
+
+    print(f"Scoring {len(samples)} answers with RAGAS Faithfulness ({judge_model_id})…")
+    result = evaluate(
+        dataset=EvaluationDataset(samples=samples),
+        metrics=[Faithfulness(llm=judge_llm)],
+        llm=judge_llm,
+        show_progress=True,
+        raise_exceptions=False,
+    )
+    scores = result.to_pandas()["faithfulness"].tolist()
+
+    threshold = cfg.get("faithfulness_threshold", 1.0)
+    with open(output_path, "a") as out:
+        for (qid, model), raw in zip(pending, scores):
+            faithfulness = _clean_score(raw)
+            out.write(
+                json.dumps(
+                    {
+                        "query_id": qid,
+                        "model": model,
+                        "faithfulness": faithfulness,
+                        "judge_model": judge_model_id,
+                        "method": "ragas",
+                    }
+                )
+                + "\n"
+            )
+            flag = "UNFAITHFUL" if faithfulness < threshold else "ok"
             print(f"  {qid}/{model}: faithfulness={faithfulness:.2f} [{flag}]")
 
     print(f"\nJudge scores written to {output_path}")
