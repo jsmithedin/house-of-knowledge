@@ -26,16 +26,17 @@ from pathlib import Path
 # which must run inside a Task. ragas applies nest_asyncio at import, and on
 # Python 3.14 that leaves current_task() as None, so every wait_for in ragas'
 # scoring path raises "Timeout should be used inside a task" and each score
-# silently becomes NaN. ragas only ever calls wait_for with timeout=None (the
-# metric timeout default), so for that case we await the awaitable directly and
-# skip the broken timeout context. A real timeout still routes to the stdlib.
-_real_wait_for = asyncio.wait_for
-
-
+# silently becomes NaN. evaluate() passes run_config.timeout (default 180), so the
+# timeout is never None — we must bypass the broken timeout context for every
+# value. asyncio.wait enforces the timeout the older way (loop.call_later), which
+# needs no current task, so it works under nest_asyncio on 3.14.
 async def _wait_for_compat(fut, timeout=None):
-    if timeout is None:
-        return await fut
-    return await _real_wait_for(fut, timeout)
+    task = asyncio.ensure_future(fut)
+    done, _ = await asyncio.wait({task}, timeout=timeout)
+    if task in done:
+        return task.result()
+    task.cancel()
+    raise asyncio.TimeoutError()
 
 
 asyncio.wait_for = _wait_for_compat
