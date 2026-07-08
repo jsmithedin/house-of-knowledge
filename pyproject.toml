@@ -3,7 +3,7 @@ name = "house-of-knowledge"
 version = "0.1.0"
 requires-python = ">=3.11"
 dependencies = [
-    "streamlit==1.44.1",
+    "streamlit==1.54.0",
     "chromadb==0.6.3",
     "sentence-transformers==3.4.1",
     "boto3==1.37.29",
