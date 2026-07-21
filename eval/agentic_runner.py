@@ -25,7 +25,7 @@ from pathlib import Path
 
 import yaml
 
-from app.bedrock import BedrockClient
+from app.bedrock import BedrockClient, BedrockError
 from app.config import NOVA_LITE_MODEL_ID, HAIKU_MODEL_ID, Settings, estimate_cost_usd
 from app.embedder import Embedder
 from app.rag import AGENTIC_SYSTEM_PROMPT, SEARCH_TOOL
@@ -199,16 +199,54 @@ def main() -> None:
                     {"role": "user", "content": [{"text": f"Question: {query_rec['query']}"}]},
                 ]
 
+                base_config = {
+                    "default_k": k,
+                    "max_iterations": args.max_iterations,
+                    "temperature": _INFERENCE_CONFIG["temperature"],
+                    "model_id": client.model_id,
+                }
+
                 t1 = time.perf_counter()
-                result = client.invoke_with_tools(
-                    system_prompt=AGENTIC_SYSTEM_PROMPT,
-                    initial_messages=initial_messages,
-                    tools=[SEARCH_TOOL],
-                    tool_executor=tool_executor,
-                    max_iterations=args.max_iterations,
-                    on_iteration=on_iteration,
-                    inference_config=_INFERENCE_CONFIG,
-                )
+                try:
+                    result = client.invoke_with_tools(
+                        system_prompt=AGENTIC_SYSTEM_PROMPT,
+                        initial_messages=initial_messages,
+                        tools=[SEARCH_TOOL],
+                        tool_executor=tool_executor,
+                        max_iterations=args.max_iterations,
+                        on_iteration=on_iteration,
+                        inference_config=_INFERENCE_CONFIG,
+                    )
+                except BedrockError as e:
+                    # Most likely cause: max_iterations reached without end_turn — the
+                    # model kept searching and never converged on an answer. That's a
+                    # real result for this eval (a failure mode standard RAG can't even
+                    # have), not a run-breaking bug — record it and move on, same as the
+                    # live app's RagPipeline._query_agentic falling back on BedrockError
+                    # instead of crashing.
+                    latency_ms = int((time.perf_counter() - t1) * 1000)
+                    record = {
+                        "run_id": args.run_id,
+                        "query_id": qid,
+                        "model": label,
+                        "answer": f"[NO ANSWER — {e}]",
+                        "error": str(e),
+                        "retrieved": retrieved_flat,
+                        "tool_calls": tool_calls,
+                        "iterations": len(trace),
+                        "trace": trace,
+                        "usage": {"input_tokens": 0, "output_tokens": 0},
+                        "latency_ms": latency_ms,
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "config": base_config,
+                    }
+                    out.write(json.dumps(record) + "\n")
+                    out.flush()
+                    print(
+                        f"  {label}: FAILED after {len(trace)} iteration(s), "
+                        f"{len(tool_calls)} search call(s) — {e}"
+                    )
+                    continue
                 latency_ms = int((time.perf_counter() - t1) * 1000)
 
                 cost = estimate_cost_usd(client.model_id, result.input_tokens, result.output_tokens)
@@ -219,6 +257,7 @@ def main() -> None:
                     "query_id": qid,
                     "model": label,
                     "answer": result.text,
+                    "error": None,
                     "retrieved": retrieved_flat,
                     "tool_calls": tool_calls,
                     "iterations": len(trace),
@@ -229,12 +268,7 @@ def main() -> None:
                     },
                     "latency_ms": latency_ms,
                     "timestamp": datetime.now(timezone.utc).isoformat(),
-                    "config": {
-                        "default_k": k,
-                        "max_iterations": args.max_iterations,
-                        "temperature": _INFERENCE_CONFIG["temperature"],
-                        "model_id": client.model_id,
-                    },
+                    "config": base_config,
                 }
                 out.write(json.dumps(record) + "\n")
                 out.flush()
