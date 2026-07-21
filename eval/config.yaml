@@ -1,9 +1,10 @@
 models:
   - nova-lite    # -> app.config.NOVA_LITE_MODEL_ID = "amazon.nova-lite-v1:0"
-  - haiku-4.5   # -> app.config.HAIKU_MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
-                 # NOTE: if .env sets BEDROCK_MODEL_ID to the eu. inference profile
-                 # ("eu.anthropic.claude-haiku-4-5-20251001-v1:0"), update HAIKU_MODEL_ID
-                 # in app/config.py and re-pin here
+  - haiku-4.5   # -> app.config.HAIKU_MODEL_ID = "eu.anthropic.claude-haiku-4-5-20251001-v1:0"
+                 # Confirmed 2026-07-21: the bare on-demand ID is rejected by Bedrock
+                 # ("on-demand throughput isn't supported") when calling Converse with
+                 # tools (agentic runner). Re-pinned to the eu. cross-region inference
+                 # profile ID, which has its own MODEL_PRICING entry in app/config.py.
 k: 5
 # Judge model: outside both evaluated families (not Amazon, not Anthropic) to avoid self-preference bias.
 # Mistral Large: neutral family. Confirmed 2026-07-01 that eu-west-2 only offers

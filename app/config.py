@@ -3,7 +3,9 @@ from dataclasses import dataclass, field
 
 
 NOVA_LITE_MODEL_ID = "amazon.nova-lite-v1:0"
-HAIKU_MODEL_ID = "anthropic.claude-haiku-4-5-20251001-v1:0"
+# Bedrock rejects the bare on-demand ID for this model in eu-west-2 ("on-demand
+# throughput isn't supported"). Must use the cross-region inference profile ID.
+HAIKU_MODEL_ID = "eu.anthropic.claude-haiku-4-5-20251001-v1:0"
 
 MODEL_LABELS: dict[str, str] = {
     NOVA_LITE_MODEL_ID: "Nova Lite",
