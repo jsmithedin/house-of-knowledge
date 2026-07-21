@@ -8,7 +8,20 @@ import argparse
 import hashlib
 import json
 import random
+import re
 from pathlib import Path
+
+# Nova Lite's agentic-mode answers sometimes include a raw <thinking>...</thinking>
+# block as literal text in the final response (Haiku 4.5 never does this, in either
+# mode) — an artifact of Nova Lite's tool-use output, not something app/bedrock.py
+# currently strips. Left in, it's an instant tell for blind scoring: the moment a
+# scorer spots a thinking block, they know which answer is Nova Lite. Strip it before
+# handing answers to the blind pack. No-op for every other answer.
+_THINKING_BLOCK = re.compile(r"<thinking>.*?</thinking>\s*", re.DOTALL)
+
+
+def _strip_thinking(answer: str) -> str:
+    return _THINKING_BLOCK.sub("", answer).strip()
 
 
 def label_assignments(run_id: str, query_ids: list[str], models: list[str]) -> dict[str, dict[str, str]]:
@@ -68,7 +81,7 @@ def main() -> None:
         golden = golden_by_id.get(qid, {})
         for label in ("A", "B"):
             model = assignments[qid][label]
-            answer = results_by_query[qid][model]["answer"]
+            answer = _strip_thinking(results_by_query[qid][model]["answer"])
             pack.append({
                 "query_id": qid,
                 "label": label,

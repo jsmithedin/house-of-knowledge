@@ -1,6 +1,6 @@
 """Tests for recall computation, blind-pack generation, and unmask join."""
 from eval.score_retrieval import compute_retrieval_score
-from eval.make_blind import label_assignments
+from eval.make_blind import label_assignments, _strip_thinking
 from eval.unmask import join_scores
 
 
@@ -45,6 +45,23 @@ def test_recall_empty_retrieved():
     score = compute_retrieval_score(golden, [])
     assert score["recall"] == 0.0
     assert score["hit"] is False
+
+
+# ---- Thinking-block stripping (blind-pack anonymity) ----
+
+def test_strip_thinking_removes_block():
+    answer = "<thinking>internal reasoning here</thinking>\n\nThe actual answer."
+    assert _strip_thinking(answer) == "The actual answer."
+
+
+def test_strip_thinking_no_block_unchanged():
+    answer = "Just a normal answer, no thinking block."
+    assert _strip_thinking(answer) == answer
+
+
+def test_strip_thinking_multiline_block():
+    answer = "<thinking>line one\nline two\nline three</thinking>Answer text."
+    assert _strip_thinking(answer) == "Answer text."
 
 
 # ---- Blind pack / label assignment ----

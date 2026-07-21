@@ -87,7 +87,48 @@ def main() -> None:
             lines.append(f"| {tier} | {len(items)} | {mc:.2f} | {mco:.2f} | {nh} |")
         lines.append("")
 
+    # --- Judge-only faithfulness, when there's no human scoring to cross-reference ---
+    # (e.g. skipped under time pressure). Faithfulness is claims-supported-by-context,
+    # NOT the same thing as correctness against the golden answer or completeness —
+    # don't present it as a substitute for those. The judge only agreed with human
+    # scoring 31% of the time in Post 6 and specifically punishes honest refusals, so
+    # flag that plainly rather than let these numbers read as equivalent to a human
+    # pass.
+    if judge and not scored:
+        lines.append("## Judge faithfulness only — no human scoring this run\n")
+        lines.append(
+            "No blind human scoring was done for this run. These are RAGAS/judge-model "
+            "faithfulness scores only (claims supported by retrieved context — not "
+            "correctness against the golden answer, not completeness). The judge agreed "
+            "with human scoring only 31% of the time in Post 6 and tends to punish honest "
+            "refusals — treat as a rough signal, not a verdict.\n"
+        )
+        threshold = cfg.get("faithfulness_threshold", 1.0)
+        by_model_tier_j: dict[str, dict[str, list[dict]]] = defaultdict(lambda: defaultdict(list))
+        for j in judge:
+            qid = j["query_id"]
+            tier = golden_by_id.get(qid, {}).get("tier", "unknown")
+            model = j.get("model", "?")
+            by_model_tier_j[model][tier].append(j)
+
+        for model, tiers in sorted(by_model_tier_j.items()):
+            lines.append(f"### {model}\n")
+            lines.append("| tier | n | mean_faithfulness | below_threshold |")
+            lines.append("|------|---|--------------------|------------------|")
+            for tier, items in sorted(tiers.items()):
+                mf = statistics.mean(i["faithfulness"] for i in items)
+                nb = sum(1 for i in items if i["faithfulness"] < threshold)
+                lines.append(f"| {tier} | {len(items)} | {mf:.2f} | {nb} |")
+            lines.append("")
+
     # --- Retrieval scores per tier ---
+    # score_retrieval.py tags each row with the model whose search produced it.
+    # Standard-mode runs collapse to one model per query (retrieval doesn't vary),
+    # so this table is unchanged from before. Agentic-mode runs can have distinct
+    # retrieval per model — break those out separately rather than blending two
+    # different search behaviours into one average.
+    retrieval_models = {r.get("model") for r in retrieval if r.get("model")}
+
     lines.append("## Retrieval (model-independent)\n")
     tier_ret: dict[str, list[dict]] = defaultdict(list)
     for r in retrieval:
@@ -101,6 +142,25 @@ def main() -> None:
         hr = sum(1 for i in items if i["hit"]) / len(items)
         lines.append(f"| {tier} | {len(items)} | {ar:.2f} | {hr:.2f} |")
     lines.append("")
+
+    if len(retrieval_models) > 1:
+        lines.append("## Retrieval by model\n")
+        lines.append(
+            "Retrieval diverged by model (each drove its own searches) — "
+            "the table above blends both; this breaks them out.\n"
+        )
+        tier_model_ret: dict[tuple[str, str], list[dict]] = defaultdict(list)
+        for r in retrieval:
+            tier = golden_by_id.get(r["query_id"], {}).get("tier", "unknown")
+            tier_model_ret[(tier, r.get("model", "?"))].append(r)
+
+        lines.append("| tier | model | n | avg_recall | hit_rate |")
+        lines.append("|------|-------|---|-----------|----------|")
+        for (tier, model), items in sorted(tier_model_ret.items()):
+            ar = statistics.mean(i["recall"] for i in items)
+            hr = sum(1 for i in items if i["hit"]) / len(items)
+            lines.append(f"| {tier} | {model} | {len(items)} | {ar:.2f} | {hr:.2f} |")
+        lines.append("")
 
     # --- Cost and latency ---
     lines.append("## Cost and latency\n")

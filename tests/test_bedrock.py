@@ -57,6 +57,37 @@ def test_invoke_success_with_usage():
     assert call_kwargs["system"] == [{"text": "system"}]
 
 
+def test_invoke_strips_thinking_block():
+    mock_client = MagicMock()
+    mock_client.converse.return_value = _converse_response(
+        "<thinking>internal reasoning</thinking>\n\nThe actual answer."
+    )
+
+    with patch("app.bedrock.boto3.client", return_value=mock_client):
+        bc = BedrockClient(model_id="amazon.nova-lite-v1:0", region="eu-west-2")
+        result = bc.invoke("system", "user")
+
+    assert result.text == "The actual answer."
+
+
+def test_invoke_with_tools_strips_thinking_block():
+    mock_client = MagicMock()
+    mock_client.converse.return_value = _converse_response(
+        "<thinking>internal reasoning</thinking>Direct answer."
+    )
+
+    with patch("app.bedrock.boto3.client", return_value=mock_client):
+        bc = BedrockClient(model_id="amazon.nova-lite-v1:0", region="eu-west-2")
+        result = bc.invoke_with_tools(
+            system_prompt="sys",
+            initial_messages=[{"role": "user", "content": [{"text": "Hello"}]}],
+            tools=[],
+            tool_executor=MagicMock(),
+        )
+
+    assert result.text == "Direct answer."
+
+
 def test_invoke_success_missing_usage_defaults_zero():
     mock_client = MagicMock()
     mock_client.converse.return_value = {

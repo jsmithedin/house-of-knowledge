@@ -1,10 +1,17 @@
 import logging
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 
 import boto3
 
 log = logging.getLogger(__name__)
+
+# Nova Lite sometimes includes a raw <thinking>...</thinking> block as literal text
+# in its final response (seen consistently in agentic-mode tool-use replies; Haiku
+# 4.5 never does this). Bedrock doesn't separate it into its own content type, so
+# without stripping it here, the internal monologue goes straight to the user.
+_THINKING_BLOCK = re.compile(r"<thinking>.*?</thinking>\s*", re.DOTALL)
 
 
 class BedrockError(Exception):
@@ -55,7 +62,7 @@ def _normalize_messages(messages: list[dict]) -> list[dict]:
 def _extract_text(content: list[dict]) -> str:
     for block in content:
         if "text" in block:
-            return block["text"]
+            return _THINKING_BLOCK.sub("", block["text"]).strip()
     raise BedrockError("No text block in model response")
 
 

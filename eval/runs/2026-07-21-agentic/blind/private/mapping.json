@@ -1,0 +1,98 @@
+{
+  "q01": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q02": {
+    "A": "haiku-4.5",
+    "B": "nova-lite"
+  },
+  "q03": {
+    "A": "haiku-4.5",
+    "B": "nova-lite"
+  },
+  "q04": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q05": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q06": {
+    "A": "haiku-4.5",
+    "B": "nova-lite"
+  },
+  "q07": {
+    "A": "haiku-4.5",
+    "B": "nova-lite"
+  },
+  "q08": {
+    "A": "haiku-4.5",
+    "B": "nova-lite"
+  },
+  "q09": {
+    "A": "haiku-4.5",
+    "B": "nova-lite"
+  },
+  "q10": {
+    "A": "haiku-4.5",
+    "B": "nova-lite"
+  },
+  "q11": {
+    "A": "haiku-4.5",
+    "B": "nova-lite"
+  },
+  "q12": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q13": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q14": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q15": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q16": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q17": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q18": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q19": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q20": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q21": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q22": {
+    "A": "haiku-4.5",
+    "B": "nova-lite"
+  },
+  "q23": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  },
+  "q24": {
+    "A": "nova-lite",
+    "B": "haiku-4.5"
+  }
+}
