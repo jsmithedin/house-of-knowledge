@@ -54,12 +54,25 @@ from eval.runner import load_golden_set
 
 
 def _contexts_from_retrieved(retrieved: list[dict]) -> list[str]:
-    """One context string per retrieved chunk, matching RAGAS' retrieved_contexts."""
+    """One context string per *unique* retrieved chunk, matching RAGAS' retrieved_contexts.
+
+    Deduped by chunk_id: standard-mode runs retrieve each chunk at most once anyway
+    (no-op there), but agentic-mode runs can retrieve the same chunk across several
+    tool calls (e.g. the budget-hogging pattern from Post 7 — one note dominating
+    multiple searches), which otherwise inflates the judge prompt with duplicate
+    text and eats into the judge model's context window for no analytical benefit.
+    """
+    seen: set[str] = set()
     contexts = []
     for r in retrieved:
         doc = r.get("document", "")
-        if doc:
-            contexts.append(doc)
+        if not doc:
+            continue
+        chunk_id = r.get("chunk_id", doc)
+        if chunk_id in seen:
+            continue
+        seen.add(chunk_id)
+        contexts.append(doc)
     return contexts
 
 
@@ -121,6 +134,7 @@ def main() -> None:
     # so we can map RAGAS' row-ordered results back to their records.
     pending: list[tuple[str, str]] = []
     samples: list[SingleTurnSample] = []
+    skipped_errors: list[tuple[str, str]] = []
     with open(run_dir / "results.jsonl") as f:
         for line in f:
             line = line.strip()
@@ -130,6 +144,14 @@ def main() -> None:
             qid, model = rec["query_id"], rec["model"]
             if (qid, model) in done:
                 continue
+            # agentic_runner.py records a run that hit max_iterations/BedrockError
+            # with an "error" field and a placeholder answer — there's no real
+            # response to score faithfulness against, so skip it rather than feed
+            # RAGAS a non-answer (standard runner.py's records never set "error",
+            # so this is a no-op there).
+            if rec.get("error"):
+                skipped_errors.append((qid, model))
+                continue
             pending.append((qid, model))
             samples.append(
                 SingleTurnSample(
@@ -138,6 +160,9 @@ def main() -> None:
                     retrieved_contexts=_contexts_from_retrieved(rec["retrieved"]),
                 )
             )
+
+    if skipped_errors:
+        print(f"Skipping {len(skipped_errors)} failed run(s) — no real answer to judge: {skipped_errors}")
 
     if not samples:
         print("Nothing to score — all answers already judged.")
