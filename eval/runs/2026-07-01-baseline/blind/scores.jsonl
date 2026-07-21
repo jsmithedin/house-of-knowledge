@@ -1,0 +1,48 @@
+{"query_id": "q14", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:10:37.506339+00:00"}
+{"query_id": "q05", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:10:57.356207+00:00"}
+{"query_id": "q10", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:11:22.871262+00:00"}
+{"query_id": "q18", "label": "B", "correctness": 2, "completeness": 1, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:11:55.114376+00:00"}
+{"query_id": "q19", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:12:13.743765+00:00"}
+{"query_id": "q04", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:12:41.645495+00:00"}
+{"query_id": "q23", "label": "B", "correctness": 0, "completeness": 0, "hallucination": false, "notes": "Potential retrieval failure, didn't get any notes that matched", "scored_at": "2026-07-01T19:13:26.863482+00:00"}
+{"query_id": "q09", "label": "A", "correctness": 2, "completeness": 1, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:13:54.400058+00:00"}
+{"query_id": "q14", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:14:14.305855+00:00"}
+{"query_id": "q24", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:14:37.563125+00:00"}
+{"query_id": "q04", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:14:48.953277+00:00"}
+{"query_id": "q11", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:15:22.513405+00:00"}
+{"query_id": "q13", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:15:47.317349+00:00"}
+{"query_id": "q06", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:16:05.796495+00:00"}
+{"query_id": "q20", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:16:29.564531+00:00"}
+{"query_id": "q01", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:16:52.543852+00:00"}
+{"query_id": "q13", "label": "B", "correctness": 2, "completeness": 1, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:17:26.188824+00:00"}
+{"query_id": "q03", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:17:55.570542+00:00"}
+{"query_id": "q03", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:18:09.491063+00:00"}
+{"query_id": "q02", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:18:31.066745+00:00"}
+{"query_id": "q22", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:19:04.915389+00:00"}
+{"query_id": "q20", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:19:43.548456+00:00"}
+{"query_id": "q08", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:19:59.898357+00:00"}
+{"query_id": "q21", "label": "B", "correctness": 1, "completeness": 1, "hallucination": false, "notes": "Got half way there, knew that Ultrin caused a wound but not when or what it cost.  Maybe retrieval issue?", "scored_at": "2026-07-01T19:21:10.089641+00:00"}
+{"query_id": "q21", "label": "A", "correctness": 1, "completeness": 1, "hallucination": true, "notes": "Got half way there, knew that Ultrin caused a wound but not when or what it cost.  Maybe retrieval issue?  Got it wrong that this was during Jorunds trial.", "scored_at": "2026-07-01T19:22:04.567259+00:00"}
+{"query_id": "q15", "label": "B", "correctness": 1, "completeness": 1, "hallucination": false, "notes": "Got half way.  Got it right that it was some sort of barrier.  Maybe retrieval issue? ", "scored_at": "2026-07-01T19:22:54.898732+00:00"}
+{"query_id": "q11", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:23:19.020800+00:00"}
+{"query_id": "q15", "label": "A", "correctness": 1, "completeness": 1, "hallucination": false, "notes": "didn't get that this was a portable device", "scored_at": "2026-07-01T19:23:42.299790+00:00"}
+{"query_id": "q17", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:23:58.146759+00:00"}
+{"query_id": "q22", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:24:09.567779+00:00"}
+{"query_id": "q24", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:24:23.643670+00:00"}
+{"query_id": "q23", "label": "A", "correctness": 0, "completeness": 0, "hallucination": false, "notes": "Has no info on the device, retrieval issue?", "scored_at": "2026-07-01T19:24:46.237219+00:00"}
+{"query_id": "q06", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:25:06.260609+00:00"}
+{"query_id": "q16", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:25:26.261302+00:00"}
+{"query_id": "q10", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:25:35.325595+00:00"}
+{"query_id": "q08", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:25:56.101466+00:00"}
+{"query_id": "q19", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:26:22.101055+00:00"}
+{"query_id": "q09", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:26:35.325576+00:00"}
+{"query_id": "q07", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:26:44.269671+00:00"}
+{"query_id": "q05", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:26:58.793684+00:00"}
+{"query_id": "q02", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:27:11.863447+00:00"}
+{"query_id": "q07", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:27:21.476052+00:00"}
+{"query_id": "q12", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:27:45.728138+00:00"}
+{"query_id": "q17", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:28:05.040803+00:00"}
+{"query_id": "q12", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:28:22.451645+00:00"}
+{"query_id": "q01", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:28:47.261451+00:00"}
+{"query_id": "q18", "label": "A", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:29:13.265789+00:00"}
+{"query_id": "q16", "label": "B", "correctness": 2, "completeness": 2, "hallucination": false, "notes": "", "scored_at": "2026-07-01T19:29:21.805642+00:00"}

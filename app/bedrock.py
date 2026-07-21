@@ -110,19 +110,22 @@ class BedrockClient:
         tools: list[dict],
         tool_executor: Callable[[str, dict], str],
         max_iterations: int = 5,
+        on_iteration: Callable[[int, str, dict], None] | None = None,
+        inference_config: dict | None = None,
     ) -> InvokeResult:
         messages = _normalize_messages(initial_messages)
         tool_config = _build_tool_config(tools)
+        cfg = inference_config if inference_config is not None else {"maxTokens": 2048}
         total_input = total_output = 0
 
-        for _ in range(max_iterations):
+        for i in range(max_iterations):
             try:
                 response = self._client.converse(
                     modelId=self.model_id,
                     system=[{"text": system_prompt}],
                     messages=messages,
                     toolConfig=tool_config,
-                    inferenceConfig={"maxTokens": 2048},
+                    inferenceConfig=cfg,
                 )
             except Exception as e:
                 log.exception(
@@ -137,6 +140,9 @@ class BedrockClient:
             stop_reason = response.get("stopReason")
             output_message = response["output"]["message"]
             messages.append(output_message)
+
+            if on_iteration is not None:
+                on_iteration(i + 1, stop_reason, output_message)
 
             if stop_reason == "end_turn":
                 return InvokeResult(

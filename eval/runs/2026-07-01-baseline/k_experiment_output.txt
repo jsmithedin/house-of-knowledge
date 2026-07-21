@@ -1,0 +1,48 @@
+$ uv run python -m eval.retrieval_experiment --k 5 10 15
+Loading embedder…
+Index size: 769 chunks.
+=== k=5 ===
+tier         n    avg_recall    hit_rate
+---------  ---  ------------  ----------
+lookup       8          1           1
+synthesis    8          0.6         1
+temporal     8          0.62        0.75
+=== k=10 ===
+tier         n    avg_recall    hit_rate
+---------  ---  ------------  ----------
+lookup       8          1           1
+synthesis    8          0.85        1
+temporal     8          0.81        0.88
+=== k=15 ===
+tier         n    avg_recall    hit_rate
+---------  ---  ------------  ----------
+lookup       8          1           1
+synthesis    8          0.85        1
+temporal     8          0.88        0.88
+=== Per-query recall across k values ===
+query_id    tier         k=5    k=10    k=15
+----------  ---------  -----  ------  ------
+q01         lookup      1       1       1
+q02         lookup      1       1       1
+q03         lookup      1       1       1
+q04         lookup      1       1       1
+q05         lookup      1       1       1
+q06         lookup      1       1       1
+q07         lookup      1       1       1
+q08         lookup      1       1       1
+q09         synthesis   0.5     1       1
+q10         synthesis   0.5     1       1
+q11         synthesis   0.67    1       1
+q12         synthesis   0.67    0.67    0.67
+q13         synthesis   0.5     0.5     0.5
+q14         synthesis   0.67    1       1
+q15         synthesis   0.33    0.67    0.67
+q16         synthesis   1       1       1
+q17         temporal    1       1       1
+q18         temporal    0.5     1       1
+q19         temporal    1       1       1
+q20         temporal    1       1       1
+q21         temporal    0.5     0.5     1
+q22         temporal    1       1       1
+q23         temporal    0       0       0
+q24         temporal    0       1       1

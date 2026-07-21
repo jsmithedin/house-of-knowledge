@@ -310,6 +310,87 @@ def test_invoke_with_tools_unexpected_stop_reason_raises():
     assert mock_client.converse.call_count == 1
 
 
+def test_invoke_with_tools_calls_on_iteration_per_turn():
+    mock_client = MagicMock()
+    mock_client.converse.side_effect = [
+        _tool_use_response("t1", "search_knowledge_base", {"query": "Ivaran"}),
+        _converse_response("Ivaran was revealed as Bergst."),
+    ]
+    on_iteration = MagicMock()
+
+    with patch("app.bedrock.boto3.client", return_value=mock_client):
+        bc = BedrockClient(model_id="anthropic.claude-haiku-4-5-20251001-v1:0", region="eu-west-2")
+        bc.invoke_with_tools(
+            system_prompt="sys",
+            initial_messages=[{"role": "user", "content": [{"text": "Who is Ivaran?"}]}],
+            tools=[],
+            tool_executor=lambda n, i: "result",
+            on_iteration=on_iteration,
+        )
+
+    assert on_iteration.call_count == 2
+    first_call = on_iteration.call_args_list[0]
+    assert first_call[0][0] == 1
+    assert first_call[0][1] == "tool_use"
+    assert first_call[0][2]["role"] == "assistant"
+
+    second_call = on_iteration.call_args_list[1]
+    assert second_call[0][0] == 2
+    assert second_call[0][1] == "end_turn"
+
+
+def test_invoke_with_tools_on_iteration_optional():
+    """Omitting on_iteration doesn't break the existing call path."""
+    mock_client = MagicMock()
+    mock_client.converse.return_value = _converse_response("Answer.")
+
+    with patch("app.bedrock.boto3.client", return_value=mock_client):
+        bc = BedrockClient(model_id="amazon.nova-lite-v1:0", region="eu-west-2")
+        result = bc.invoke_with_tools(
+            "sys",
+            [{"role": "user", "content": [{"text": "?"}]}],
+            [],
+            lambda n, i: "r",
+        )
+
+    assert result.text == "Answer."
+
+
+def test_invoke_with_tools_uses_provided_inference_config():
+    mock_client = MagicMock()
+    mock_client.converse.return_value = _converse_response("Answer.")
+
+    with patch("app.bedrock.boto3.client", return_value=mock_client):
+        bc = BedrockClient(model_id="amazon.nova-lite-v1:0", region="eu-west-2")
+        bc.invoke_with_tools(
+            "sys",
+            [{"role": "user", "content": [{"text": "?"}]}],
+            [],
+            lambda n, i: "r",
+            inference_config={"maxTokens": 2048, "temperature": 0.0},
+        )
+
+    call_kwargs = mock_client.converse.call_args[1]
+    assert call_kwargs["inferenceConfig"] == {"maxTokens": 2048, "temperature": 0.0}
+
+
+def test_invoke_with_tools_defaults_inference_config_when_none():
+    mock_client = MagicMock()
+    mock_client.converse.return_value = _converse_response("Answer.")
+
+    with patch("app.bedrock.boto3.client", return_value=mock_client):
+        bc = BedrockClient(model_id="amazon.nova-lite-v1:0", region="eu-west-2")
+        bc.invoke_with_tools(
+            "sys",
+            [{"role": "user", "content": [{"text": "?"}]}],
+            [],
+            lambda n, i: "r",
+        )
+
+    call_kwargs = mock_client.converse.call_args[1]
+    assert call_kwargs["inferenceConfig"] == {"maxTokens": 2048}
+
+
 def test_invoke_with_tools_accepts_legacy_anthropic_message_blocks():
     mock_client = MagicMock()
     mock_client.converse.return_value = _converse_response("Answer.")
